@@ -1,0 +1,5 @@
+{
+    "terminal.integrated.env.linux": {
+        "RCLONE_CONFIG": "/workspaces/rl-enzyme-engineering/rclone.conf"
+    }
+}
