@@ -16,9 +16,13 @@ def read_partial_fasta_file(file_path, num_sequences):
             break
     return sequences
 
-sequences = read_partial_fasta_file('data/uniprot-all-enzymes.fasta', 10)
+sequences = read_partial_fasta_file('data/uniprot-all-enzymes.fasta', 10000)
 
+seqs_shorter_400 = []
 for seq in sequences:
-    print(seq.id)
-    print(repr(seq.seq))
-    print(len(seq), "characters\n")
+    if len(seq) <= 400:
+        seqs_shorter_400.append(seq)
+
+for seq in seqs_shorter_400:
+    print(seq.)
+    print(seq.format('fasta'))
