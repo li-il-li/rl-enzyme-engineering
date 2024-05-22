@@ -1,0 +1,3 @@
+[submodule "models-tests/alphaflow/alphaflow"]
+	path = models-tests/alphaflow/alphaflow
+	url = https://github.com/bjing2016/alphaflow.git

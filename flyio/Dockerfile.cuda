@@ -14,7 +14,7 @@ FROM base as runtime
 
 # Setup SSH
 RUN apt-get update \
- && apt-get install -y openssh-server curl git rclone \
+ && apt-get install -y openssh-server curl git rclone gcc zlib1g-dev g++ \
  && cp /etc/ssh/sshd_config /etc/ssh/sshd_config-original \
  && sed -i 's/^#\s*Port.*/Port 2222/' /etc/ssh/sshd_config \
  && sed -i 's/^#\s*PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config \
