@@ -8,8 +8,11 @@ primary_region = 'ord'
   size = 'a100-40gb'
   
 [[mounts]]
-source = "data"
-destination = "/data"
+source = "projects"
+destination = "/root/projects"
+initial_size = "40GB"
+auto_extend_size_threshold = 80
+auto_extend_size_increment = "5GB"
 
 [[services]]
   internal_port = 2222
