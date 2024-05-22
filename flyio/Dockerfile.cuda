@@ -12,18 +12,20 @@ RUN cd /cuda-samples/Samples/1_Utilities/deviceQuery && \
 
 FROM base as runtime
 #RUN apt install -y --no-install-recommends libcudnn8 libcublas-12-2
-# Install SSH
+# Install SSH & git & rclone
 RUN apt-get update \
- && apt-get install -y openssh-server \
+ && apt-get install -y openssh-server git rclone\
  && cp /etc/ssh/sshd_config /etc/ssh/sshd_config-original \
  && sed -i 's/^#\s*Port.*/Port 2222/' /etc/ssh/sshd_config \
  && sed -i 's/^#\s*PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config \
+ && sed -i 's/^#\s*AllowAgentForwarding no/AllowAgentForwarding yes/' /etc/ssh/sshd_config \
  && mkdir -p /root/.ssh \
  && chmod 700 /root/.ssh \
  && mkdir /var/run/sshd \
  && chmod 755 /var/run/sshd \
  && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 COPY --from=builder /usr/local/bin/deviceQuery /usr/local/bin/deviceQuery
-
+COPY --chmod=0755 ./init.py /root/init.py
 COPY --chmod=0755 ./entrypoint.sh ./entrypoint.sh
+
 CMD ["/bin/bash", "-c", "./entrypoint.sh"]
