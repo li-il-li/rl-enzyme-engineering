@@ -8,6 +8,7 @@ echo "export GIT_PASSWORD=$GIT_PASSWORD"
 echo "export RCLONE_CONFIG=/root/projects/rl-enzyme-engineering/rclone.conf"
 } >> /root/.bashrc
 
+source ${HOME}/conda/etc/profile.d/conda.sh
 
 /usr/sbin/sshd
 exec "$@"
