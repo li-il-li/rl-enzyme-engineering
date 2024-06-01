@@ -1,5 +1,6 @@
 {
     "recommendations": [
+        "arianjamasb.protein-viewer",
         "ms-toolsai.jupyter",
         "ms-python.python"
     ]
