@@ -2,3 +2,4 @@ notes/
 data/
 ckpts/
 env310/
+.DS_Store

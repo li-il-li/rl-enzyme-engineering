@@ -3,18 +3,24 @@ RUN apt update -q && apt install -y ca-certificates wget && \
     wget -qO /cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb && \
     dpkg -i /cuda-keyring.deb && apt update -q
 
+
 FROM base as builder
-RUN apt install -y --no-install-recommends git cuda-nvcc-12-2
+RUN apt install -y --no-install-recommends git cuda-nvcc-11-8
 RUN git clone --depth=1 https://github.com/nvidia/cuda-samples.git /cuda-samples
 RUN cd /cuda-samples/Samples/1_Utilities/deviceQuery && \
     make && install -m 755 deviceQuery /usr/local/bin
 
 
 FROM base as runtime
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install CUDA
+RUN apt install -y --no-install-recommends cuda-toolkit-11-8 \
+ && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Setup SSH
 RUN apt-get update \
- && apt-get install -y openssh-server curl git rclone gcc zlib1g-dev g++ \
+ && apt-get install -y openssh-server curl git rclone neovim unzip g++ zlib1g-dev software-properties-common \
  && cp /etc/ssh/sshd_config /etc/ssh/sshd_config-original \
  && sed -i 's/^#\s*Port.*/Port 2222/' /etc/ssh/sshd_config \
  && sed -i 's/^#\s*PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config \
@@ -24,12 +30,33 @@ RUN apt-get update \
  && mkdir /var/run/sshd \
  && chmod 755 /var/run/sshd \
  && rm -rf /var/lib/apt/lists /var/cache/apt/archives
-#COPY --from=builder /usr/local/bin/deviceQuery /usr/local/bin/deviceQuery
 
-# Install Conda
-RUN wget -O Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
-RUN bash Miniforge3.sh -b -p "${HOME}/conda"
+# Setup Python
+RUN add-apt-repository ppa:deadsnakes/ppa \
+ && apt-get install -y python3.10 python3.10-venv python3.10-distutil python3.8 python3.8-venv python3.8-distutil \
+ && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
+# Install utilities
+
+## Lazygit
+RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
+ && curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz" \
+ && tar xf lazygit.tar.gz lazygit \
+ && install lazygit /usr/local/bin
+
+# Model Dependencies
+
+## FABind+
+### graph-tool
+RUN wget https://downloads.skewed.de/skewed-keyring/skewed-keyring_1.0_all_$(lsb_release -s -c).deb \
+ && dpkg -i skewed-keyring_1.0_all_$(lsb_release -s -c).deb \
+ && rm skewed-keyring_1.0_all_$(lsb_release -s -c).deb
+RUN echo "deb [signed-by=/usr/share/keyrings/skewed-keyring.gpg] https://downloads.skewed.de/apt $(lsb_release -s -c) main" > \
+    /etc/apt/sources.list.d/skewed.list
+RUN  apt-get update && apt-get install -y python3-graph-tool openbabel \
+ && rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
+# Init
 COPY --chmod=0755 ./init.py /root/init.py
 COPY --chmod=0755 ./entrypoint.sh ./entrypoint.sh
 
