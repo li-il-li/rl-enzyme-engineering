@@ -2,6 +2,7 @@
 import sys
 sys.path.append("/root/projects/rl-enzyme-engineering/src/AlphaFlow")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/fabind")
+sys.path.append("/root/projects/rl-enzyme-engineering/src/DSMBind")
 
 # %%
 device = 'cuda:0'
@@ -110,6 +111,7 @@ def infer():
 infer()
 
 # %%
+# FABind
 index_csv="/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/inference_examples/example.csv"
 index_csv_mol="/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/inference_examples/example-mol.csv"
 pdb_file_dir="/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/inference_examples/pdb_files"
@@ -364,3 +366,213 @@ if args.write_mol_to_file:
 
 end_time = time.time()  # 记录开始时间
 logger.log_message(f"End test, time spent: {end_time - start_time}")
+# %% FABind+ Sample
+import sys
+sys.path.append("/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/fabind")
+"""
+data_path=pdbbind2020
+ckpt_path=ckpt/confidence_model.bin
+sample_size=40
+
+python fabind/test_sampling_fabind.py \
+    --batch_size 8 \
+    --data-path ${data_path} \
+    --resultFolder ./results \
+    --exp-name test_exp \
+    --ckpt ${ckpt_path} --use-clustering --infer-dropout \
+    --sample-size ${sample_size} \
+    --symmetric-rmsd ${data_path}/renumber_atom_index_same_as_smiles \
+    --save-rmsd-dir ./rmsd_results
+"""
+
+import numpy as np
+import os
+
+import torch
+
+from data import get_data
+from torch_geometric.loader import DataLoader
+from FABind.FABind_plus.fabind.utils.metrics import *
+from FABind.FABind_plus.fabind.utils.utils import *
+from FABind.FABind_plus.fabind.utils.logging_utils import Logger
+import sys
+import argparse
+from accelerate import Accelerator
+from accelerate import DistributedDataParallelKwargs
+from accelerate.utils import set_seed
+import shlex
+from FABind.FABind_plus.fabind.utils.training_confidence import validate
+from FABind.FABind_plus.fabind.utils.parsing import parse_train_args
+
+parser = argparse.ArgumentParser(description='FABind model testing.')
+
+parser.add_argument("--ckpt", type=str, default='../checkpoints/pytorch_model.bin')
+parser.add_argument("--data-path", type=str, default="/PDBbind_data/pdbbind2020",
+                    help="Data path.")
+parser.add_argument("--resultFolder", type=str, default="./result",
+                    help="information you want to keep a record.")
+parser.add_argument("--exp-name", type=str, default="",
+                    help="data path.")
+parser.add_argument('--seed', type=int, default=600,
+                    help="seed to use.")
+parser.add_argument("--batch_size", type=int, default=8,
+                    help="batch size.")
+parser.add_argument("--write-mol-to-file", type=str, default=None)
+parser.add_argument("--infer-logging", action='store_true', default=False)
+parser.add_argument("--use-clustering", action='store_true', default=False)
+parser.add_argument("--dbscan-eps", type=float, default=9.0)
+parser.add_argument("--dbscan-min-samples", type=int, default=2)
+parser.add_argument("--choose-cluster-prob", type=float, default=0.5)
+parser.add_argument("--save-rmsd-dir", type=str, default=None)
+parser.add_argument("--infer-dropout", action='store_true', default=False)
+parser.add_argument("--symmetric-rmsd", default=None, type=str, help="path to the raw molecule file")
+parser.add_argument("--command", type=str, default=None)
+parser.add_argument("--sample-size", type=int, default=1)
+
+test_args = parser.parse_args()
+_, train_parser = parse_train_args(test=True)
+train_parser.add_argument("--stack-mlp", action='store_true', default=False)
+train_parser.add_argument("--confidence-dropout", type=float, default=0.1)
+train_parser.add_argument("--confidence-use-ln-mlp", action='store_true', default=False)
+train_parser.add_argument("--confidence-mlp-hidden-scale", type=int, default=2)
+train_parser.add_argument("--ranking-loss", type=str, default='logsigmoid', choices=['logsigmoid', 'dynamic_hinge'])
+train_parser.add_argument("--num-copies", type=int, default=1)
+train_parser.add_argument("--keep-cls-2A", action='store_true', default=False)
+
+
+if test_args.command is not None:
+    command = test_args.command
+else:
+    command = 'fabind/main_fabind.py --stack-mlp --confidence-dropout 0.2 --confidence-mlp-hidden-scale 1 --confidence-use-ln-mlp --batch_size 2 --label baseline --addNoise 5 --resultFolder fabind_reg --seed 224 --total-epochs 1500 --exp-name fabind_plus_regression --coord-loss-weight 1.5 --pair-distance-loss-weight 1 --pair-distance-distill-loss-weight 1 --pocket-cls-loss-weight 1 --pocket-distance-loss-weight 0.05 --pocket-radius-loss-weight 0.05 --lr 5e-5 --lr-scheduler poly_decay --n-iter 8 --mean-layers 5 --hidden-size 512 --pocket-pred-hidden-size 128 --rm-layernorm --add-attn-pair-bias --explicit-pair-embed --add-cross-attn-layer --clip-grad --expand-clength-set --cut-train-set --random-n-iter --use-ln-mlp --mlp-hidden-scale 1 --permutation-invariant --use-for-radius-pred ligand --dropout 0.1 --use-esm2-feat --dis-map-thres 15 --pocket-radius-buffer 5 --min-pocket-radius 20'
+command = shlex.split(command)
+
+args = train_parser.parse_args(command[1:])
+# print(vars(test_args))
+for attr in vars(test_args):
+    # Set the corresponding attribute in args
+    setattr(args, attr, getattr(test_args, attr))
+# Overwrite or set specific attributes as needed
+args.tqdm_interval = 0.1
+args.disable_tqdm = False
+args.confidence_inference = True
+args.confidence_training = True
+
+set_seed(args.seed)
+
+ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], mixed_precision=args.mixed_precision)
+
+pre = f"{args.resultFolder}/{args.exp_name}"
+
+accelerator.wait_for_everyone()
+
+os.makedirs(pre, exist_ok=True)
+logger = Logger(accelerator=accelerator, log_path=f'{pre}/test.log')
+
+logger.log_message(f"{' '.join(sys.argv)}")
+
+# torch.set_num_threads(1)
+
+torch.multiprocessing.set_sharing_strategy('file_system')
+
+
+train, valid, test= get_data(args, logger, addNoise=args.addNoise, use_whole_protein=args.use_whole_protein, compound_coords_init_mode=args.compound_coords_init_mode, pre=args.data_path)
+logger.log_message(f"data point train: {len(train)}, valid: {len(valid)}, test: {len(test)}")
+num_workers = 10
+
+test_loader = DataLoader(test, batch_size=args.batch_size, follow_batch=['x', 'compound_pair'], shuffle=False, pin_memory=False, num_workers=num_workers)
+
+test_unseen_pdb_list = [line.strip() for line in open("split_pdb_id/unseen_test_index")]
+# test_unseen_pdb_list = [line.strip() for line in open("../split_pdb_id/sw_0.8_unseen_test_index")]
+test_unseen_index = test.data.query("(group =='test') and (pdb in @test_unseen_pdb_list)").index.values
+# double check
+test_unseen_index_for_select = np.array([np.where(test._indices == i) for i in test_unseen_index]).reshape(-1)
+test_unseen = test.index_select(test_unseen_index_for_select)
+test_unseen_loader = DataLoader(test_unseen, batch_size=args.batch_size, follow_batch=['x', 'compound_pair'], shuffle=False, pin_memory=False, num_workers=num_workers)
+
+
+from FABind.FABind_plus.fabind.models.model import *
+device = 'cuda'
+model = get_model(args, logger)
+model = accelerator.prepare(model)
+model.load_state_dict(torch.load(args.ckpt), strict=False)
+compound_confidence_criterion = nn.BCEWithLogitsLoss()
+
+if args.infer_dropout:
+    model.train()
+    for name, submodule in model.named_modules():
+        if name.startswith('confidence') or name.startswith('ranking'):
+            submodule.eval()
+else:
+    model.eval()
+
+
+logger.log_message(f"Begin test")
+if accelerator.is_main_process:
+    for epoch in range(args.sample_size):
+        metrics = validate(accelerator, args, test_loader, accelerator.unwrap_model(model), compound_confidence_criterion, accelerator.device, epoch=epoch, stage=2)
+        logger.log_stats(metrics, epoch, args, prefix="Test_pp")
+    
+accelerator.wait_for_everyone()
+
+# %%
+# DSMBind
+import sys
+sys.path.append("/root/projects/rl-enzyme-engineering/src/DSMBind")
+import torch
+from tqdm import tqdm
+import numpy as np
+import scipy
+import random
+import glob
+import csv
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from collections import defaultdict
+from sklearn.metrics import roc_auc_score, roc_curve
+from DSMBind.bindenergy.models import DrugDataset, DrugAllAtomEnergyModel, load_esm_embedding
+%env TORCH_EXTENSIONS_DIR=.
+# %%
+fn = "DSMBind/ckpts/model.drug.allatom"
+model_ckpt_DSMBind, opt_ckpt, model_args = torch.load(fn)
+model_DSMBind = DrugAllAtomEnergyModel(model_args).cuda()
+model_DSMBind.load_state_dict(model_ckpt_DSMBind)
+model_DSMBind.eval()
+
+# %%
+test_casf16 = DrugDataset("/root/projects/rl-enzyme-engineering/data/DSMBind/data/drug/test_casf16.pkl", 50)
+test_equibind = DrugDataset("/root/projects/rl-enzyme-engineering/data/DSMBind/data/drug/test_equibind.pkl", 50)
+test_fep = DrugDataset("/root/projects/rl-enzyme-engineering/data/DSMBind/data/drug/test_fep.pkl", 50)
+
+# %%
+from pprint import pprint
+pprint(test_casf16.data[1])
+
+# %%
+embedding = load_esm_embedding(test_equibind.data + test_casf16.data + test_fep.data, ['target_seq'])
+
+# %%
+def pdbbind_evaluate(model, data, embedding, args):
+    model.eval()
+    score = []
+    label = []
+    with torch.no_grad():
+        for entry in tqdm(data):
+            binder, target = DrugDataset.make_bind_batch([entry], embedding, args)
+            pred = model.predict(binder, target)
+            score.append(-1.0 * pred.item())
+            label.append(entry['affinity'])
+    return scipy.stats.spearmanr(score, label)[0], score, label
+
+# %%
+casf16_corr, casf16_score, casf16_label = pdbbind_evaluate(
+    model, test_casf16, embedding, model_args
+)
+equibind_corr, equibind_score, equibind_label = pdbbind_evaluate(
+    model, test_equibind, embedding, model_args
+)
+
+# %%
+protein = torch.load("/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/inference_examples/temp_files/processed_protein.pt")
+pprint(protein)
