@@ -9,6 +9,8 @@ from accelerate import DistributedDataParallelKwargs
 from accelerate.utils import set_seed
 import shlex
 import time
+import traceback
+
 
 from tqdm import tqdm
 
@@ -87,14 +89,14 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 def post_optim_mol(args, accelerator, data, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp, rigid=False):
+    print("Running post optim")
     post_optim_device='cpu'
     for i in range(compound_batch.max().item()+1):
+        print("Post Optim Loop")
         i_mask = (compound_batch == i)
         com_coord_pred_i = com_coord_pred[i_mask]
-        com_coord_i = data[i]['compound'].rdkit_coords
-
+        com_coord_i = data['compound'].rdkit_coords
         com_coord_pred_center_i = com_coord_pred_i.mean(dim=0).reshape(1, 3)
-        
         if args.post_optim:
             predict_coord, loss, rmsd = post_optimize_compound_coords(
                 reference_compound_coords=com_coord_i.to(post_optim_device),
@@ -110,12 +112,12 @@ def post_optim_mol(args, accelerator, data, com_coord_pred, com_coord_pred_per_s
         
         com_coord_pred_per_sample_list.append(com_coord_pred[i_mask])
         com_coord_per_sample_list.append(com_coord_i)
-        com_coord_offset_per_sample_list.append(data[i].coord_offset)
+        com_coord_offset_per_sample_list.append(data.coord_offset[i])
         
-        mol_list.append(data[i].mol)
-        uid_list.append(data[i].uid)
-        smiles_list.append(data[i]['compound'].smiles)
-        sdf_name_list.append(data[i].ligand_id + '.sdf')
+        mol_list.append(data.mol[i])
+        uid_list.append(data.uid[i])
+        smiles_list.append(data['compound'].smiles[i])
+        sdf_name_list.append(data.ligand_id[i] + '.sdf')
 
     return
 
@@ -124,6 +126,8 @@ dataset = InferenceDataset(infer_args.index_csv, infer_args.pdb_file_dir, infer_
 logger.log_message(f"data point: {len(dataset)}")
 num_workers = 0
 data_loader = DataLoader(dataset, batch_size=args.batch_size, follow_batch=['x'], shuffle=False, pin_memory=False, num_workers=num_workers)
+print("Dataset Dataloader:")
+print(data_loader.dataset)
 
 device = 'cuda'
 from models.model import *
@@ -153,8 +157,15 @@ mol_list = []
 com_coord_pred_per_sample_list = []
 com_coord_offset_per_sample_list = []
 
+from pprint import pprint
+
 data_iter = tqdm(data_loader, mininterval=args.tqdm_interval, disable=not accelerator.is_main_process)
 for batch_id, data in enumerate(data_iter):
+    pprint("Data start")
+    pprint(data)
+    pprint("Data end")
+    pprint(data.seq_whole)
+    pprint("Data sepcific end")
     try:
         data = data.to(device)
         LAS_tmp = []
@@ -163,21 +174,29 @@ for batch_id, data in enumerate(data_iter):
         with torch.no_grad():
             
             com_coord_pred, compound_batch = model.inference(data)        
-        post_optim_mol(args, accelerator, data, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp=LAS_tmp)
+        try:
+            post_optim_mol(args, accelerator, data, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp=LAS_tmp)
+        except Exception as e2:
+            print("here")
+            print(e2)
+            traceback.print_exc() 
     except Exception as e:
-        print(e)
+        traceback.print_exc() 
         continue
 
 if args.sdf_to_mol2:
     from utils.sdf_to_mol2 import convert_sdf_to_mol2
     
 if args.write_mol_to_file:
+    print("Writing to file.")
     info = pd.DataFrame({'uid': uid_list, 'smiles': smiles_list, 'sdf_name': sdf_name_list})
+    #print(f"INFO: {info} ")
     info.to_csv(os.path.join(args.sdf_output_path_post_optim, f"uid_smiles_sdfname.csv"), index=False)
     for i in tqdm(range(len(info))):
         
         save_coords = com_coord_pred_per_sample_list[i] + com_coord_offset_per_sample_list[i]
         sdf_output_path = os.path.join(args.sdf_output_path_post_optim, info.iloc[i]['sdf_name'])
+        print(f"SDF Output path: ${sdf_output_path}")
         mol = write_mol(reference_mol=mol_list[i], coords=save_coords, output_file=sdf_output_path)
         if args.sdf_to_mol2:
             convert_sdf_to_mol2(sdf_output_path, sdf_output_path.replace('.sdf', '.mol2'))        

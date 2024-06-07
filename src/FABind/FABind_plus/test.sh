@@ -11,17 +11,17 @@ output_dir=../inference_examples/inference_output
 cd fabind
 
 echo "======  preprocess molecules  ======"
-python inference_preprocess_mol_confs.py --index_csv ${index_csv_mol} --save_mols_dir ${save_mols_dir} --num_threads ${num_threads}
+#python inference_preprocess_mol_confs.py --index_csv ${index_csv_mol} --save_mols_dir ${save_mols_dir} --num_threads ${num_threads}
 
 echo "======  preprocess proteins  ======"
-python inference_preprocess_protein.py --pdb_file_dir ${pdb_file_dir} --save_pt_dir ${save_pt_dir}
+#python inference_preprocess_protein.py --pdb_file_dir ${pdb_file_dir} --save_pt_dir ${save_pt_dir}
 
 echo "======  inference begins  ======"
 python inference_fabind.py \
     --ckpt ${ckpt_path} \
     --batch_size 4 \
-    --post-optim \
     --write-mol-to-file \
     --sdf-output-path-post-optim ${output_dir} \
     --index-csv ${index_csv} \
-    --preprocess-dir ${save_pt_dir}
+    --preprocess-dir ${save_pt_dir} \
+#    --post-optim \

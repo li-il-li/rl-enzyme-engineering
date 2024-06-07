@@ -80,7 +80,7 @@ def extract_torchdrug_feature_from_mol(mol, has_LAS_mask=False, ):
         LAS_edge_index = None
     
     molstd = td.Molecule.from_smiles(Chem.MolToSmiles(mol),node_feature='property_prediction')
-    compound_node_features = molstd.node_feature # nodes_chemical_features
+    compound_node_features = molstd.atom_feature# nodes_chemical_features
     edge_list = molstd.edge_list # [num_edge, 3] (node_in, node_out, relation)
     edge_weight = molstd.edge_weight # [num_edge, 1]
     assert edge_weight.max() == 1
