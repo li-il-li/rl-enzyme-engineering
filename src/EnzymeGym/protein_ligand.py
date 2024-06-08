@@ -1,14 +1,42 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+# Hydra
+from omegaconf import DictConfig, OmegaConf
+import hydra
+# EvoDiff
+from evodiff.pretrained import OA_DM_38M, OA_DM_640M
+from evodiff.conditional_generation import inpaint_simple
+# AlphaFlow
+
+# FABind+
+
+# DSMBind
+
 
 class ProteinLigandInteractionEnv(gym.Env):
 
-    def __init__(self, render_mode=None, wildtype: str = 'AA'):
-        self.wildtype = wildtype
-        self.aa_seq_len = len(wildtype) # The length of the wildtype AA sequnce
+    def __init__(self, render_mode=None,
+                 wildtype_aa_seq: str = 'AA',
+                 ligand_smile: str = 'SMILE',
+                 device = 'cuda',
+                 config={}):
+        
+        # Hydra Config
+        self.config = config
 
-        # Observations are dictionaries with the fittest location and the proteinligand conformation
+        # Models
+        self.device = device
+        self.sequence_model, self.sequenze_tokenizer = self._init_evodiff()
+
+        # Protein Ligand
+        self.wildtype_aa_seq = wildtype_aa_seq
+        self.aa_seq_len = len(wildtype_aa_seq)
+        self.ligand_smile = ligand_smile
+        self.mutant_aa_seq = wildtype_aa_seq
+
+        # RL Environment
+        # Observations: Dictionary with the fittest mutant and the proteinligand conformation
         # encoded in latent variable Z.
         self.observation_space = spaces.Dict(
             {
@@ -40,7 +68,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         
     def _get_obs(self):
         return {
-            "fittest_mutation_aa_seq": self.wildtype,
+            "fittest_mutation_aa_seq": self.mutant_aa_seq,
             "protein_ligand_conformation_Z": np.zeros((2,2), dtype=np.float32)
         }
 
@@ -61,9 +89,32 @@ class ProteinLigandInteractionEnv(gym.Env):
 
     def step(self, action):
 
+        aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
+        
+        sample, entire_sequence, generated_idr = inpaint_simple(
+            self.sequence_model,
+            self.mutant_aa_seq,
+            aa_seq_hole_start_idx,
+            aa_seq_hole_end_idx,
+            tokenizer=self.sequenze_tokenizer,
+            device=self.device
+        )
+
+        self.mutant_aa_seq = entire_sequence
+        
+        
+
+        
+
         terminated = False
         reward = 1 if terminated else 0  # Binary sparse rewards
         observation = self._get_obs()
         info = self._get_info()
 
         return observation, reward, terminated, False, info
+    
+    def _init_evodiff(self):
+        model, collater, tokenizer, scheme = OA_DM_640M()
+        model.to(device=self.device)
+
+        return model, tokenizer

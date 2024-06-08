@@ -1,0 +1,8 @@
+experiment:
+  wildtype_AA_seq: "MAPLRKTYVLKLYVAGNTPNSVRALKTLNNILEKEFKGVYALKVIDVLKNPQLAEEDKILATPTLAKVLPPPVRRIIGDLSNREKVLIGLDLLYEEIGDQAEDDLGLE"
+  ligand_smile: "saffasdfsaf"
+  device: "cuda"
+evodiff:
+  checkpoint: "fasdf"
+alphaflow:
+  checkpoint: "fasdf"
