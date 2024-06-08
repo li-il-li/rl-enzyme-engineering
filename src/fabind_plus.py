@@ -222,27 +222,30 @@ mol_list = []
 com_coord_pred_per_sample_list = []
 com_coord_offset_per_sample_list = []
 
-def post_optim_mol(args, device, data, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp, rigid=False):
+# %%
+def post_optim_mol(
+    args,
+    device,
+    data,
+    com_coord_pred,
+    com_coord_pred_per_sample_list,
+    com_coord_offset_per_sample_list,
+    com_coord_per_sample_list,
+    compound_batch,
+    LAS_tmp,
+    rigid=False
+):
     print("Running post optim")
-    post_optim_device='cpu'
+    post_optim_device=device
     for i in range(compound_batch.max().item()+1):
         print("Post Optim Loop")
         i_mask = (compound_batch == i)
         com_coord_pred_i = com_coord_pred[i_mask]
         com_coord_i = data['compound'].rdkit_coords
         com_coord_pred_center_i = com_coord_pred_i.mean(dim=0).reshape(1, 3)
-        if args.post_optim:
-            predict_coord, loss, rmsd = post_optimize_compound_coords(
-                reference_compound_coords=com_coord_i.to(post_optim_device),
-                predict_compound_coords=com_coord_pred_i.to(post_optim_device),
-                # LAS_edge_index=(data[i]['complex', 'LAS', 'complex'].edge_index - data[i]['complex', 'LAS', 'complex'].edge_index.min()).to(post_optim_device),
-                LAS_edge_index=LAS_tmp[i].to(post_optim_device),
-                mode=args.post_optim_mode,
-                total_epoch=args.post_optim_epoch,
-            )
-            predict_coord = predict_coord.to(device)
-            predict_coord = predict_coord - predict_coord.mean(dim=0).reshape(1, 3) + com_coord_pred_center_i
-            com_coord_pred[i_mask] = predict_coord
+        print(f"com_coord_i: {com_coord_i}")
+        print(f"com_coord_pred_i: {com_coord_pred_i}")
+        print(f"LAS_tmp: {LAS_tmp}")
         
         com_coord_pred_per_sample_list.append(com_coord_pred[i_mask])
         com_coord_per_sample_list.append(com_coord_i)
@@ -262,19 +265,47 @@ from FABind.FABind_plus.fabind.utils.post_optim_utils import post_optimize_compo
 
 data_loader = DataLoader(dataset, batch_size=args.batch_size, follow_batch=['x'], shuffle=False, pin_memory=False, num_workers=0)
 for i_batch, batch in enumerate(data_loader):
+    pprint(batch)
     batch = batch.to(device)
     LAS_tmp = []
     for i in range(len(batch)):
         LAS_tmp.append(batch[i]['compound', 'LAS', 'compound'].edge_index.detach().clone())
     with torch.no_grad():
+        stage=1
         com_coord_pred, compound_batch = model.inference(batch)        
-        print("hey")
-        print(com_coord_pred)
-        post_optim_mol(args, device, batch, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp=LAS_tmp)
+        post_optim_mol(
+            args,
+            device,
+            batch,
+            com_coord_pred,
+            com_coord_pred_per_sample_list,
+            com_coord_offset_per_sample_list,
+            com_coord_per_sample_list,
+            compound_batch,
+            LAS_tmp=LAS_tmp
+        )
 
 # %%
+from rdkit.Geometry import Point3D 
 
+def create_mol(reference_mol, coords):
+    mol = reference_mol
+    if mol is None:
+        raise Exception("Reference mol should not be None.")
+    conf = mol.GetConformer()
+    for i in range(mol.GetNumAtoms()):
+        x, y, z = coords[i]
+        conf.SetAtomPosition(i, Point3D(float(x), float(y), float(z)))
+    return mol
+# %%
+mols = []
+info = pd.DataFrame({'uid': uid_list, 'smiles': smiles_list, 'sdf_name': sdf_name_list})
+for i in tqdm(range(len(info))):
+    save_coords = com_coord_pred_per_sample_list[i] + com_coord_offset_per_sample_list[i]
+    mol = create_mol(reference_mol=mol_list[i], coords=save_coords)
+    mols.append(mol)
 
+pprint(mols)
 
 
 
@@ -295,4 +326,44 @@ view = nv.NGLWidget()
 view.add_component(structure1)
 view.add_component(structure2)
 
+view
+
+# %%
+import io
+from Bio.PDB import PDBIO
+
+def pdb_to_string(structure):
+    stream = io.StringIO()
+    pdbio = PDBIO()
+    pdbio.set_structure(structure)
+    pdbio.save(stream)
+    return stream.getvalue()
+
+pdb_string = pdb_to_string(structure)
+
+# %%
+from rdkit.Chem import AllChem as Chem
+
+def mol_to_sdf_string(mol):
+    stream = io.StringIO()
+    writer = Chem.SDWriter(stream)
+    writer.write(mol)
+    writer.flush()
+    return stream.getvalue()
+
+sdf_string = mol_to_sdf_string(mols[0])
+
+# %%
+import nglview as nv
+
+# Create the structures as components from strings
+structure1 = nv.TextStructure(pdb_string, ext='pdb')
+structure2 = nv.TextStructure(sdf_string, ext='sdf')
+
+# Create a new NGLView widget
+view = nv.NGLWidget()
+view.add_component(structure1)
+view.add_component(structure2)
+
+# Display the widget
 view
