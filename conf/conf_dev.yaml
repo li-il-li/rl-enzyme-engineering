@@ -3,6 +3,14 @@ experiment:
   ligand_smile: "saffasdfsaf"
   device: "cuda"
 evodiff:
-  checkpoint: "fasdf"
+  ckpt: "fasdf"
 alphaflow:
-  checkpoint: "fasdf"
+  ckpt: "/root/projects/rl-enzyme-engineering/ckpts/AlphaFlow/esmflow_md_distilled_202402.pt"
+  samples: 5
+  noisy_first: True
+  no_diffusion: True
+  self_cond: False
+fabind:
+  ckpt: "fasdf"
+dsmbind:
+  ckpt: "fasdf"
