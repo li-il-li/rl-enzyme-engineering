@@ -5,6 +5,7 @@ import numpy as np
 class ProteinLigandInteractionEnv(gym.Env):
 
     def __init__(self, render_mode=None, wildtype: str = 'AA'):
+        self.wildtype = wildtype
         self.aa_seq_len = len(wildtype) # The length of the wildtype AA sequnce
 
         # Observations are dictionaries with the fittest location and the proteinligand conformation
@@ -39,7 +40,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         
     def _get_obs(self):
         return {
-            "fittest_mutation_aa_seq": "ABSCD",
+            "fittest_mutation_aa_seq": self.wildtype,
             "protein_ligand_conformation_Z": np.zeros((2,2), dtype=np.float32)
         }
 
