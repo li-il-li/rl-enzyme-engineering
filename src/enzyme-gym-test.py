@@ -1,21 +1,33 @@
 # %%
 %load_ext autoreload
 %autoreload 2
+
+# %%
+import sys
+sys.path.append("/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/AlphaFlow")
 # %%
 import EnzymeGym
 import gymnasium
 import numpy as np
 from pprint import pprint
 from hydra import initialize, compose
-
+import os
 # %%
 # Configuration
 with initialize(version_base=None, config_path="../conf/"):
     cfg = compose(config_name='conf_dev',
                   overrides=[
-                      "experiment.ligand_smile=ADSFASDFA"
-                  ])
-    pprint(cfg, indent=2)
+                      "experiment.ligand_smile=ADSFASDFA",
+                  ],
+                  return_hydra_config=True)
+    
+dir_path = cfg.experiment.directory
+if not os.path.exists(dir_path):
+    os.makedirs(dir_path)
+
+os.chdir(dir_path)
+
+print(os.getcwd())
 # %%
 # Create Environment
 env = gymnasium.make('EnzymeGym/ProteinLigandInteraction-v0',

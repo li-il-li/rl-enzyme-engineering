@@ -2,8 +2,8 @@
     "recommendations": [
         "arianjamasb.protein-viewer",
         "ms-toolsai.jupyter",
-        "ms-python.python",
-        "iterative.dvc",
-        "quarto.quarto"
+        "quarto.quarto",
+        "ms-toolsai.tensorboard",
+        "ms-python.python"
     ]
 }

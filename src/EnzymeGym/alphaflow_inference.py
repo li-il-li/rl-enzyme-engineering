@@ -49,6 +49,10 @@ def generate_conformation_ensemble(model: ESMFoldWrapper, cfg, AA_sequences=[]):
             pdb_str = prots_to_pdb(result)
             protein_structure = pdb_string_to_structure(pdb_str)
             conformation_structures.append(protein_structure)
+            
+            # While testing
+            with open(f'pdbs/{item["name"]}.pdb', 'w') as f:
+            f.write(protein.prots_to_pdb(result))
     
     return conformation_structures
 

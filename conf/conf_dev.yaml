@@ -2,6 +2,7 @@ experiment:
   wildtype_AA_seq: "MAPLRKTYVLKLYVAGNTPNSVRALKTLNNILEKEFKGVYALKVIDVLKNPQLAEEDKILATPTLAKVLPPPVRRIIGDLSNREKVLIGLDLLYEEIGDQAEDDLGLE"
   ligand_smile: "saffasdfsaf"
   device: "cuda"
+  directory: ${hydra.run.dir}
 evodiff:
   ckpt: "fasdf"
   mutations: 5
@@ -17,3 +18,8 @@ fabind:
   ckpt: "fasdf"
 dsmbind:
   ckpt: "fasdf"
+hydra:
+  run:
+    dir: ../experiments/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: True
