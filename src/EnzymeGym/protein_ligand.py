@@ -109,7 +109,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         # Genereate Protein Conformation Ensemble (Folding + MD)
         conformation_structures = generate_conformation_ensemble(self.folding_model,
                                                                  self.config,
-                                                                 self.mutant_aa_seq)
+                                                                 [self.mutant_aa_seq])
         self.conformation_structures = conformation_structures
         
         # Protein Ligand Docking
