@@ -1,8 +1,4 @@
 # %%
-%load_ext autoreload
-%autoreload 2
-
-# %%
 import sys
 sys.path.append("/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/AlphaFlow")
 # %%

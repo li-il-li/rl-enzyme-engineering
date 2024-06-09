@@ -50,17 +50,17 @@ def generate_conformation_ensemble(model: ESMFoldWrapper, cfg, AA_sequences=[]):
             protein_structure = pdb_string_to_structure(pdb_str)
             conformation_structures.append(protein_structure)
             
-            # While testing
-            with open(f'pdbs/{item["name"]}.pdb', 'w') as f:
-            f.write(protein.prots_to_pdb(result))
+            # While testing, write out every pdb -> maybe async in future
+            with open(f'{item["name"]}.pdb', 'w') as f:
+                f.write(prots_to_pdb(result))
     
     return conformation_structures
 
 def create_batch(AA_sequences=[]):
     batch = []
-    for seq in AA_sequences:
+    for i,seq in enumerate(AA_sequences):
         entry= {
-            'name': 'id', # TODO Use ID here
+            'name': i,
             'seqres': seq,
             'aatype': seq_to_tensor(seq),
             'residue_index': torch.arange(len(seq)),

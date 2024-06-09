@@ -1,6 +1,8 @@
 notes/
 data/
 ckpts/
+experiments/
 env310/
 .DS_Store
-__pycache__
+__pycache__/
+src/EnzymeGym/__pycache__
