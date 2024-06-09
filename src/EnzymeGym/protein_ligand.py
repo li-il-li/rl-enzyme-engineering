@@ -8,11 +8,10 @@ import hydra
 from evodiff.pretrained import OA_DM_38M, OA_DM_640M
 from evodiff.conditional_generation import inpaint_simple
 # AlphaFlow
-
+from ..alphaflow_inference import init_esmflow, generate_conformation_ensemble
 # FABind+
 
 # DSMBind
-
 
 class ProteinLigandInteractionEnv(gym.Env):
 
@@ -28,12 +27,14 @@ class ProteinLigandInteractionEnv(gym.Env):
         # Models
         self.device = device
         self.sequence_model, self.sequenze_tokenizer = self._init_evodiff()
+        self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
 
         # Protein Ligand
         self.wildtype_aa_seq = wildtype_aa_seq
         self.aa_seq_len = len(wildtype_aa_seq)
         self.ligand_smile = ligand_smile
         self.mutant_aa_seq = wildtype_aa_seq
+        self.conformation_structures = []
 
         # RL Environment
         # Observations: Dictionary with the fittest mutant and the proteinligand conformation
@@ -73,7 +74,10 @@ class ProteinLigandInteractionEnv(gym.Env):
         }
 
     def _get_info(self):
-        return { "binding_affinity": 10 }
+        return { 
+            "binding_affinity": 10,
+            "protein_conformations": self.conformation_structures
+        }
 
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
@@ -91,6 +95,7 @@ class ProteinLigandInteractionEnv(gym.Env):
 
         aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
         
+        # Mutate Sequenze
         sample, entire_sequence, generated_idr = inpaint_simple(
             self.sequence_model,
             self.mutant_aa_seq,
@@ -99,12 +104,15 @@ class ProteinLigandInteractionEnv(gym.Env):
             tokenizer=self.sequenze_tokenizer,
             device=self.device
         )
-
         self.mutant_aa_seq = entire_sequence
         
+        # Genereate Protein Conformation Ensemble (Folding + MD)
+        conformation_structures = generate_conformation_ensemble(self.folding_model,
+                                                                 self.config,
+                                                                 self.mutant_aa_seq)
+        self.conformation_structures = conformation_structures
         
-
-        
+        # Protein Ligand Docking
 
         terminated = False
         reward = 1 if terminated else 0  # Binary sparse rewards

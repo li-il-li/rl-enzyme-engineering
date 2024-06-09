@@ -4,12 +4,15 @@ experiment:
   device: "cuda"
 evodiff:
   ckpt: "fasdf"
+  mutations: 5
 alphaflow:
   ckpt: "/root/projects/rl-enzyme-engineering/ckpts/AlphaFlow/esmflow_md_distilled_202402.pt"
   samples: 5
   noisy_first: True
   no_diffusion: True
   self_cond: False
+  tmax: 0.1
+  steps: 10
 fabind:
   ckpt: "fasdf"
 dsmbind:
