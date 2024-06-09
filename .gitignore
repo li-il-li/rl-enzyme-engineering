@@ -3,3 +3,4 @@ data/
 ckpts/
 env310/
 .DS_Store
+__pycache__

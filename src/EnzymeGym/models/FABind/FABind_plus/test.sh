@@ -24,4 +24,4 @@ python inference_fabind.py \
     --sdf-output-path-post-optim ${output_dir} \
     --index-csv ${index_csv} \
     --preprocess-dir ${save_pt_dir} \
-#    --post-optim \
+    --post-optim \

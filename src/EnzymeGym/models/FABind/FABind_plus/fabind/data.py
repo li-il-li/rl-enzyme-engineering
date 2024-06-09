@@ -117,6 +117,7 @@ def get_data(args, logger, addNoise=None, use_whole_protein=False, compound_coor
     logger.log_message(f"Loading dataset")
     logger.log_message(f"compound feature based on torchdrug")
     logger.log_message(f"protein feature based on esm2")
+
     add_noise_to_com = float(addNoise) if addNoise else None
 
     new_dataset = FABindDataSet(f"{pre}/dataset", add_noise_to_com=add_noise_to_com, use_whole_protein=use_whole_protein, compound_coords_init_mode=compound_coords_init_mode, pocket_radius=args.pocket_radius, noise_for_predicted_pocket=args.noise_for_predicted_pocket, 

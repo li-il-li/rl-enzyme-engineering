@@ -8,7 +8,7 @@ import hydra
 from evodiff.pretrained import OA_DM_38M, OA_DM_640M
 from evodiff.conditional_generation import inpaint_simple
 # AlphaFlow
-from ..alphaflow_inference import init_esmflow, generate_conformation_ensemble
+from alphaflow_inference import init_esmflow, generate_conformation_ensemble
 # FABind+
 
 # DSMBind

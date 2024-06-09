@@ -88,7 +88,7 @@ logger.log_message(f"{' '.join(sys.argv)}")
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 
-def post_optim_mol(args, accelerator, data, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp, rigid=False):
+def post_optim_mol(args, device, data, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp, rigid=False):
     print("Running post optim")
     post_optim_device='cpu'
     for i in range(compound_batch.max().item()+1):
@@ -106,7 +106,7 @@ def post_optim_mol(args, accelerator, data, com_coord_pred, com_coord_pred_per_s
                 mode=args.post_optim_mode,
                 total_epoch=args.post_optim_epoch,
             )
-            predict_coord = predict_coord.to(accelerator.device)
+            predict_coord = predict_coord.to(device)
             predict_coord = predict_coord - predict_coord.mean(dim=0).reshape(1, 3) + com_coord_pred_center_i
             com_coord_pred[i_mask] = predict_coord
         
@@ -175,7 +175,7 @@ for batch_id, data in enumerate(data_iter):
             
             com_coord_pred, compound_batch = model.inference(data)        
         try:
-            post_optim_mol(args, accelerator, data, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp=LAS_tmp)
+            post_optim_mol(args, accelerator.device, data, com_coord_pred, com_coord_pred_per_sample_list, com_coord_offset_per_sample_list, com_coord_per_sample_list, compound_batch, LAS_tmp=LAS_tmp)
         except Exception as e2:
             print("here")
             print(e2)
