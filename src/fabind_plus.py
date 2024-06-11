@@ -1,15 +1,15 @@
 # %%
 import sys
-sys.path.append("/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/fabind")
+sys.path.append("/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/FABind/FABind_plus/fabind")
 # %%
 import os
 import argparse
 import torch
 #from torch_geometric.loader import DataLoader
-from FABind.FABind_plus.fabind.utils import *
-from FABind.FABind_plus.fabind.utils.parsing import parse_train_args
+from EnzymeGym.models.FABind.FABind_plus.fabind.utils import *
+from EnzymeGym.models.FABind.FABind_plus.fabind.utils.parsing import parse_train_args
 #from FABind.FABind_plus.fabind.data import get_data
-from FABind.FABind_plus.fabind.models.model import FABindPlus
+from EnzymeGym.models.FABind.FABind_plus.fabind.models.model import FABindPlus
 import sys
 import argparse
 #from accelerate import Accelerator
@@ -165,11 +165,11 @@ def extract_esm_feature(protein, model, alphabet):
 # Protein
 from pprint import pprint
 from Bio.PDB import *
-from FABind.FABind_plus.fabind.utils.inference_pdb_utils import get_clean_res_list, get_protein_structure
+from EnzymeGym.models.FABind.FABind_plus.fabind.utils.inference_pdb_utils import get_clean_res_list, get_protein_structure
 
 pdb_id = "6g3c"
 
-pdb_file = "/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/inference_examples/pdb_files/6g3c.pdb"
+pdb_file = "/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/FABind/FABind_plus/inference_examples/pdb_files/6g3c.pdb"
 
 esm2_dict = {}
 protein_dict = {}
@@ -189,7 +189,7 @@ pprint(esm2_dict)
 
 
 # %%
-from FABind.FABind_plus.fabind.utils.inference_mol_utils import read_smiles, extract_torchdrug_feature_from_mol, generate_conformation
+from EnzymeGym.models.FABind.FABind_plus.fabind.utils.inference_mol_utils import read_smiles, extract_torchdrug_feature_from_mol, generate_conformation
 # Ligand
 smile = "CC(C)CCN1c2nc(Nc3cc(F)c(O)c(F)c3)ncc2N(C)C(=O)C1(C)C"
 mol = read_smiles(smile)
@@ -236,7 +236,7 @@ def post_optim_mol(
     rigid=False
 ):
     print("Running post optim")
-    post_optim_device=device
+    post_optim_device='cpu'
     for i in range(compound_batch.max().item()+1):
         print("Post Optim Loop")
         i_mask = (compound_batch == i)
@@ -246,6 +246,20 @@ def post_optim_mol(
         print(f"com_coord_i: {com_coord_i}")
         print(f"com_coord_pred_i: {com_coord_pred_i}")
         print(f"LAS_tmp: {LAS_tmp}")
+        print(com_coord_pred_i.to(post_optim_device).requires_grad)
+        
+        if args.post_optim:
+            predict_coord, loss, rmsd = post_optimize_compound_coords(
+                reference_compound_coords=com_coord_i.to(post_optim_device),
+                predict_compound_coords=com_coord_pred_i.to(post_optim_device),
+                # LAS_edge_index=(data[i]['complex', 'LAS', 'complex'].edge_index - data[i]['complex', 'LAS', 'complex'].edge_index.min()).to(post_optim_device),
+                LAS_edge_index=LAS_tmp[i].to(post_optim_device),
+                mode=args.post_optim_mode,
+                total_epoch=args.post_optim_epoch,
+            )
+            predict_coord = predict_coord.to(device)
+            predict_coord = predict_coord - predict_coord.mean(dim=0).reshape(1, 3) + com_coord_pred_center_i
+            com_coord_pred[i_mask] = predict_coord
         
         com_coord_pred_per_sample_list.append(com_coord_pred[i_mask])
         com_coord_per_sample_list.append(com_coord_i)
@@ -260,8 +274,8 @@ def post_optim_mol(
 
 # %%
 from torch_geometric.loader import DataLoader
-from FABind.FABind_plus.fabind.utils.parsing import parse_train_args
-from FABind.FABind_plus.fabind.utils.post_optim_utils import post_optimize_compound_coords
+from EnzymeGym.models.FABind.FABind_plus.fabind.utils.parsing import parse_train_args
+from EnzymeGym.models.FABind.FABind_plus.fabind.utils.post_optim_utils import post_optimize_compound_coords
 
 data_loader = DataLoader(dataset, batch_size=args.batch_size, follow_batch=['x'], shuffle=False, pin_memory=False, num_workers=0)
 for i_batch, batch in enumerate(data_loader):
@@ -273,17 +287,18 @@ for i_batch, batch in enumerate(data_loader):
     with torch.no_grad():
         stage=1
         com_coord_pred, compound_batch = model.inference(batch)        
-        post_optim_mol(
-            args,
-            device,
-            batch,
-            com_coord_pred,
-            com_coord_pred_per_sample_list,
-            com_coord_offset_per_sample_list,
-            com_coord_per_sample_list,
-            compound_batch,
-            LAS_tmp=LAS_tmp
-        )
+
+    post_optim_mol(
+        args,
+        device,
+        batch,
+        com_coord_pred,
+        com_coord_pred_per_sample_list,
+        com_coord_offset_per_sample_list,
+        com_coord_per_sample_list,
+        compound_batch,
+        LAS_tmp=LAS_tmp
+    )
 
 # %%
 from rdkit.Geometry import Point3D 
@@ -311,8 +326,8 @@ pprint(mols)
 
 # %%
 # Visualize
-pdb_file = "/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/inference_examples/pdb_files/6g3c.pdb"
-sdf_file = "/root/projects/rl-enzyme-engineering/src/FABind/FABind_plus/inference_examples/inference_output/6g3c.sdf"
+pdb_file = "/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/FABind/FABind_plus/inference_examples/pdb_files/6g3c.pdb"
+sdf_file = "/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/FABind/FABind_plus/inference_examples/inference_output/6g3c.sdf"
 import nglview as nv
 
 # Create the structures as separate components

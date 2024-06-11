@@ -2,8 +2,8 @@ from torch_geometric.data import Dataset
 import pandas as pd
 from tqdm import tqdm
 import os
-from FABind.FABind_plus.fabind.utils.inference_pdb_utils import extract_protein_structure, extract_esm_feature
-from FABind.FABind_plus.fabind.utils.inference_mol_utils import read_smiles, extract_torchdrug_feature_from_mol, generate_conformation
+from EnzymeGym.models.FABind.FABind_plus.fabind.utils.inference_pdb_utils import extract_protein_structure, extract_esm_feature
+from EnzymeGym.models.FABind.FABind_plus.fabind.utils.inference_mol_utils import read_smiles, extract_torchdrug_feature_from_mol, generate_conformation
 from torch_geometric.data import HeteroData
 import torch
 
