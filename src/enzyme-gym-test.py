@@ -1,6 +1,7 @@
 # %%
 import sys
 sys.path.append("/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/AlphaFlow")
+sys.path.append("/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/FABind/FABind_plus/fabind")
 # %%
 import EnzymeGym
 import gymnasium
