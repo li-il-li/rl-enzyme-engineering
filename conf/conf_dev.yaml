@@ -1,6 +1,7 @@
 experiment:
-  wildtype_AA_seq: "MAPLRKTYVLKLYVAGNTPNSVRALKTLNNILEKEFKGVYALKVIDVLKNPQLAEEDKILATPTLAKVLPPPVRRIIGDLSNREKVLIGLDLLYEEIGDQAEDDLGLE"
-  ligand_smile: "saffasdfsaf"
+  wildtype_AA_seq: "MSTETLRLQKARATEEGLAFETPGGLTRALRDGCFLLAVPPGFDTTPGVTLCREFFRPVEQGGESTRAYRGFRDLDGVYFDREHFQTEHVLIDGPGRERHFPPELRRMAEHMHELARHVLRTVLTELGVARELWSEVTGGAVDGRGTEWFAANHYRSERDRLGCAPHKDTGFVTVLYIEEGGLEAATGGSWTPVDPVPGCFVVNFGGAFELLTSGLDRPVRALLHRVRQCAPRPESADRFSFAAFVNPPPTGDLYRVGADGTATVARSTEDFLRDFNERTWGDGYADFGIAPPEPAGVAEDGVRA"
+  ligand_smile: "OC(=O)CCc1ccccc1"
+  # subSmiles = ['CC(=O)CCc1ccccc1', 'OC(=O)CCc1ccccc1', 'COc1cccc(CCC(O)=O)c1', 'COc1cc(CCCO)ccc1O', 'COc1cc(CCC(O)=O)ccc1O', 'OC(=O)CCc1ccc2OCOc2c1', 'COc1cc(CCCO)cc(OC)c1O', 'OC(=O)Cc1ccccc1', 'CC(=O)CCc1ccc2OCOc2c1']
   device: "cuda"
   directory: ${hydra.run.dir}
 evodiff:
@@ -8,14 +9,18 @@ evodiff:
   mutations: 5
 alphaflow:
   ckpt: "/root/projects/rl-enzyme-engineering/ckpts/AlphaFlow/esmflow_md_distilled_202402.pt"
-  samples: 5
+  samples: 1
   noisy_first: True
   no_diffusion: True
   self_cond: False
   tmax: 0.1
   steps: 10
 fabind:
-  ckpt: "fasdf"
+  ckpt: "/root/projects/rl-enzyme-engineering/ckpts/FABind/FABind_plus/fabind_plus_best_ckpt.bin"
+  seed: 244
+  batch_size: 8
+  sample_size: 10
+  post_optim: True
 dsmbind:
   ckpt: "fasdf"
 hydra:

@@ -2,6 +2,7 @@ import os
 import argparse
 import torch
 import sys
+import time
 import argparse
 import shlex
 import pandas as pd
@@ -13,6 +14,7 @@ from torch_geometric.loader import DataLoader
 import io
 from Bio.PDB import PDBIO
 from Bio.PDB import *
+from Bio.PDB import Structure
 from rdkit.Geometry import Point3D 
 from rdkit.Chem import AllChem as Chem
 from models.FABind.FABind_plus.fabind.utils import *
@@ -95,9 +97,15 @@ args.data_path = '/root/projects/rl-enzyme-engineering/data/FABind/pdbbind2020'
 args.resultFolder = './result'
 args.exp_name = 'experiment1'
 args.seed = 224
-args.batch_size = 8
+args.batch_size = 5
 args.sample_size = 10
 args.post_optim = True
+
+def init_fabind(device):
+    docking_model = init_model_fabind(device)
+    structure_tokenzier, structure_alphabet = init_model_esm(device)
+    
+    return docking_model, structure_tokenzier, structure_alphabet
 
 def init_model_fabind(device):
     model = FABindPlus(args, args.hidden_size, args.pocket_pred_hidden_size)
@@ -146,38 +154,48 @@ def prepare_ligand(smile):
 
     return mol, molecule_info
 
-def prepare_protein(id, pdb, prot_embbeding_model, alphabet):
-    pdb_file = "/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/FABind/FABind_plus/inference_examples/pdb_files/6g3c.pdb"
-
-    parser = PDBParser(QUIET=True)
-    structure = parser.get_structure(id, pdb_file)
+def prepare_protein(id,structure, structure_tokenizer, alphabet):
     res_list = get_clean_res_list(structure.get_residues(), verbose=False, ensure_ca_exist=True)
     prot_structure = get_protein_structure(res_list)
     prot_structure['name'] = id
 
-    prot_features = extract_feature_protein(prot_structure, prot_embbeding_model, alphabet)
+    prot_features = extract_feature_protein(prot_structure, structure_tokenizer, alphabet)
     
     return  prot_structure, prot_features
     
 
-def create_input_dict(id, smile, pdb):
-    mol_structure, mol_features = prepare_ligand(smile)
-    prot_structure, prot_features = prepare_protein(id, pdb)
-    
-    input_dict = {
-        'protein_esm_feature': prot_features, 
-        'protein_structure': prot_structure, 
-        'molecule': mol_structure, 
-        'molecule_smiles': smile, 
-        'molecule_info': mol_features, 
-        'ligand_id': id
-    }
-    
-    return input_dict
-    
+def create_FABindPipelineDataset(conformation_structures, ligand, structure_tokenizer, structure_alphabet):
 
-def create_FABindPipelineDataset():
-    return
+    # Split up PDB into multiple structures because every conformation is stored in a 'Model'
+    def split_structure(structure):
+        structures = []
+        for model in structure:
+            new_structure = Structure.Structure(structure.id)
+            new_structure.add(model)
+            structures.append(new_structure)
+        return structures
+
+    input_dicts = []
+    for i_conf, conformation in enumerate(conformation_structures):
+
+        structures = split_structure(conformation)
+        for i_struct, structure in enumerate(structures):
+            id = f"{i_conf}-{i_struct}"
+            prot_structure, prot_features = prepare_protein(id, structure, structure_tokenizer, structure_alphabet)
+
+            input_dict = {
+                'protein_esm_feature': prot_features, 
+                'protein_structure': prot_structure, 
+                'molecule': ligand['mol_structure'], 
+                'molecule_smiles': ligand['smile'], 
+                'molecule_info': ligand['mol_features'], 
+                'ligand_id': id
+            }
+            
+            input_dicts.append(input_dict)
+
+    return PipelineDataset(input_dicts)
+
 
 def post_optim_mol(
     args,
@@ -195,7 +213,7 @@ def post_optim_mol(
     LAS_tmp,
     rigid=False
 ):
-    post_optim_device='cpu'
+    post_optim_device='cuda'
     for i in range(compound_batch.max().item()+1):
         i_mask = (compound_batch == i)
         com_coord_pred_i = com_coord_pred[i_mask]
@@ -234,7 +252,8 @@ def dock_proteins_ligand(dataset, docking_model, device):
     com_coord_pred_per_sample_list = []
     com_coord_offset_per_sample_list = []
 
-    data_loader = DataLoader(dataset, batch_size=args.batch_size, follow_batch=['x'], shuffle=False, pin_memory=False, num_workers=0)
+    #data_loader = DataLoader(dataset, batch_size=args.batch_size, follow_batch=['x'], shuffle=False, pin_memory=False, num_workers=0)
+    data_loader = DataLoader(dataset, batch_size=1, follow_batch=['x'], shuffle=False, pin_memory=False, num_workers=0)
     for i_batch, batch in enumerate(data_loader):
         batch = batch.to(device)
         LAS_tmp = []
@@ -243,11 +262,16 @@ def dock_proteins_ligand(dataset, docking_model, device):
         with torch.no_grad():
             stage=1
             com_coord_pred, compound_batch = docking_model.inference(batch)        
-
+        
+        start_time = time.time()
         post_optim_mol(
             args,
             device,
             batch,
+            uid_list,
+            smiles_list,
+            sdf_name_list,
+            mol_list,
             com_coord_pred,
             com_coord_pred_per_sample_list,
             com_coord_offset_per_sample_list,
@@ -255,6 +279,11 @@ def dock_proteins_ligand(dataset, docking_model, device):
             compound_batch,
             LAS_tmp=LAS_tmp
         )
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"Post optim time is {execution_time} seconds.")
+
+
 
     mols = []
     info = pd.DataFrame({'uid': uid_list, 'smiles': smiles_list, 'sdf_name': sdf_name_list})

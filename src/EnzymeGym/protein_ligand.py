@@ -4,14 +4,18 @@ import numpy as np
 # Hydra
 from omegaconf import DictConfig, OmegaConf
 import hydra
+import logging
 # EvoDiff
 from evodiff.pretrained import OA_DM_38M, OA_DM_640M
 from evodiff.conditional_generation import inpaint_simple
 # AlphaFlow
 from alphaflow_inference import init_esmflow, generate_conformation_ensemble
 # FABind+
-
+from fabind_plus_inference import init_fabind, prepare_ligand, create_FABindPipelineDataset, dock_proteins_ligand
 # DSMBind
+
+log = logging.getLogger(__name__)
+
 
 class ProteinLigandInteractionEnv(gym.Env):
 
@@ -20,21 +24,34 @@ class ProteinLigandInteractionEnv(gym.Env):
                  ligand_smile: str = 'SMILE',
                  device = 'cuda',
                  config={}):
+        log.debug("Initializing environment...")
+        log.info("Initializing environment...")
         
         # Hydra Config
         self.config = config
 
+        log.info(f"Preparing Ligand: {ligand_smile}")
+        # Ligand
+        self.ligand_smile = ligand_smile
+        self.ligand_dict = {}
+        self.ligand_dict['smile'] = ligand_smile
+        self.ligand_dict['mol_structure'], self.ligand_dict['mol_features'] = prepare_ligand(ligand_smile)
+
         # Models
         self.device = device
+        log.info("Loading sequence model ...")
         self.sequence_model, self.sequenze_tokenizer = self._init_evodiff()
+        log.info("Loading folding model ...")
         self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
+        log.info("Loading docking model ...")
+        self.docking_model, self.structure_tokenizer, self.structure_alphabet = init_fabind(device=device)
 
-        # Protein Ligand
+        # Protein
         self.wildtype_aa_seq = wildtype_aa_seq
         self.aa_seq_len = len(wildtype_aa_seq)
-        self.ligand_smile = ligand_smile
         self.mutant_aa_seq = wildtype_aa_seq
         self.conformation_structures = []
+        
 
         # RL Environment
         # Observations: Dictionary with the fittest mutant and the proteinligand conformation
@@ -95,7 +112,7 @@ class ProteinLigandInteractionEnv(gym.Env):
 
         aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
         
-        # Mutate Sequenze
+        log.info("Sample sequences ...")
         sample, entire_sequence, generated_idr = inpaint_simple(
             self.sequence_model,
             self.mutant_aa_seq,
@@ -106,13 +123,21 @@ class ProteinLigandInteractionEnv(gym.Env):
         )
         self.mutant_aa_seq = entire_sequence
         
-        # Genereate Protein Conformation Ensemble (Folding + MD)
+        log.info("Generate conformations ...")
         conformation_structures = generate_conformation_ensemble(self.folding_model,
                                                                  self.config,
                                                                  [self.mutant_aa_seq])
         self.conformation_structures = conformation_structures
         
-        # Protein Ligand Docking
+        log.info("Dock Proteins to ligand ...")
+        fabind_dataset = create_FABindPipelineDataset(conformation_structures,
+                                                      self.ligand_dict,
+                                                      self.structure_tokenizer,
+                                                      self.structure_alphabet)
+        protein_ligand_conformations = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
+        
+        
+
 
         terminated = False
         reward = 1 if terminated else 0  # Binary sparse rewards
