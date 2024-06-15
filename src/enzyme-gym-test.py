@@ -2,6 +2,7 @@
 import sys
 sys.path.append("/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/AlphaFlow")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/FABind/FABind_plus/fabind")
+sys.path.append("/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/DSMBind")
 import EnzymeGym
 import gymnasium
 import numpy as np

@@ -1,6 +1,7 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+import torch
 # Hydra
 from omegaconf import DictConfig, OmegaConf
 import hydra
@@ -13,6 +14,7 @@ from alphaflow_inference import init_esmflow, generate_conformation_ensemble
 # FABind+
 from fabind_plus_inference import init_fabind, prepare_ligand, create_FABindPipelineDataset, dock_proteins_ligand
 # DSMBind
+from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +47,9 @@ class ProteinLigandInteractionEnv(gym.Env):
         self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
         log.info("Loading docking model ...")
         self.docking_model, self.structure_tokenizer, self.structure_alphabet = init_fabind(device=device)
+        log.info("Loading binding affinity prediction model ...")
+        self.ba_model = init_DSMBind(device=device)
+
 
         # Protein
         self.wildtype_aa_seq = wildtype_aa_seq
@@ -124,7 +129,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         self.mutant_aa_seq = entire_sequence
         
         log.info("Generate conformations ...")
-        conformation_structures = generate_conformation_ensemble(self.folding_model,
+        conformation_structures, pdb_files = generate_conformation_ensemble(self.folding_model,
                                                                  self.config,
                                                                  [self.mutant_aa_seq])
         self.conformation_structures = conformation_structures
@@ -134,13 +139,15 @@ class ProteinLigandInteractionEnv(gym.Env):
                                                       self.ligand_dict,
                                                       self.structure_tokenizer,
                                                       self.structure_alphabet)
-        protein_ligand_conformations = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
+        protein_ligand_conformations_mols = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
         
-        
+        binding_affinity = self.ba_model.virtual_screen(pdb_files[0], protein_ligand_conformations_mols)
+
+        reward = binding_affinity
 
 
         terminated = False
-        reward = 1 if terminated else 0  # Binary sparse rewards
+        #reward = 1 if terminated else 0  # Binary sparse rewards
         observation = self._get_obs()
         info = self._get_info()
 

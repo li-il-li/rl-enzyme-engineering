@@ -35,6 +35,7 @@ def generate_conformation_ensemble(model: ESMFoldWrapper, cfg, AA_sequences=[]):
     # Create an ID for every sequence generated
     model.eval()
     with torch.no_grad():
+        pdb_files = []
         for i, item in enumerate(batch):
             print("Working on Batch")
             result = []
@@ -51,10 +52,12 @@ def generate_conformation_ensemble(model: ESMFoldWrapper, cfg, AA_sequences=[]):
             conformation_structures.append(protein_structure)
             
             # While testing, write out every pdb -> maybe async in future
-            with open(f'{item["name"]}.pdb', 'w') as f:
+            file_name = f'{item["name"]}.pdb'
+            with open(file_name, 'w') as f:
                 f.write(prots_to_pdb(result))
+            pdb_files.append(file_name)
     
-    return conformation_structures
+    return conformation_structures, pdb_files
 
 def create_batch(AA_sequences=[]):
     batch = []
