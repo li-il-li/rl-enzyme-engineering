@@ -28,3 +28,4 @@ hydra:
     dir: ../experiments/${now:%Y-%m-%d}/${now:%H-%M-%S}
   job:
     chdir: True
+  verbose: true

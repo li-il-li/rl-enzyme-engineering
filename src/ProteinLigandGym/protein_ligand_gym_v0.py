@@ -1,4 +1,4 @@
-from env.protein_ligand_gym import ProteinLigandInteractionEnv
+from ProteinLigandGym.env.protein_ligand_gym import ProteinLigandInteractionEnv
 
 def env(render_mode=None,
         wildtype_aa_seq: str = 'AA',

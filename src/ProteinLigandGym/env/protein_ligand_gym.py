@@ -13,7 +13,7 @@ import logging
 from evodiff.pretrained import OA_DM_38M, OA_DM_640M
 from evodiff.conditional_generation import inpaint_simple
 # AlphaFlow
-from alphaflow_inference import init_esmflow, generate_conformation_ensemble
+from ProteinLigandGym.env.alphaflow_inference import init_esmflow, generate_conformation_ensemble
 # FABind+
 from fabind_plus_inference import init_fabind, prepare_ligand, create_FABindPipelineDataset, dock_proteins_ligand
 # DSMBind
@@ -64,20 +64,20 @@ class ProteinLigandInteractionEnv(AECEnv):
         
         self.action_space = {
             "mutation_site_picker": spaces.Box(low = 0,high = len(self.wildtype_aa_seq),shape = (2,),dtype=np.int32),
-            "mutation_site_filler": spaces.Text(min = len(self.wildtype_aa_seq), max = len(self.wildtype_aa_seq)) # Use AA charset
+            "mutation_site_filler": spaces.Text(min_length = len(self.wildtype_aa_seq), max_length = len(self.wildtype_aa_seq)) # Use AA charset
         } 
         
         self.observation_space = {
             "mutation_site_picker": spaces.Dict(
                 {
-                    "mutation_aa_seq": spaces.Text(min_length=self.aa_seq_len, max_length=self.aa_seq_len),
+                    "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(2,2), dtype=np.float32)
                 }
             ),
             "mutation_site_filler": spaces.Dict(
                 {
-                    "mutation_aa_seq": spaces.Text(min_length=self.aa_seq_len, max_length=self.aa_seq_len),
-                    "mutation_site": spaces.Box(low = 0,high = self.aa_seq_len,shape = (2,),dtype=np.int32)
+                    "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
+                    "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq),shape = (2,),dtype=np.int32)
                 }
             )
         }
@@ -181,8 +181,8 @@ class ProteinLigandInteractionEnv(AECEnv):
             "placeholder": 10,
         }
     
-    #def _init_evodiff(self):
-    #    model, collater, tokenizer, scheme = OA_DM_640M()
-    #    model.to(device=self.device)
+    def _init_evodiff(self):
+        model, collater, tokenizer, scheme = OA_DM_640M()
+        model.to(device=self.device)
 
-    #    return model, tokenizer
+        return model, tokenizer

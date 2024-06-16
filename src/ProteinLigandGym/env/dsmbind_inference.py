@@ -19,7 +19,7 @@ from chemprop.nn_utils import index_select_ND
 
 def init_DSMBind(device):
     
-    fn = '/root/projects/rl-enzyme-engineering/src/EnzymeGym/models/DSMBind/ckpts/model.recA'
+    fn = '/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models/DSMBind/ckpts/model.recA'
     model_dsm_ckpt, opt_ckpt, model_args = torch.load(fn)
     model_dsm = DrugAllAtomEnergyModel(model_args, device=device)
     model_dsm.load_state_dict(model_dsm_ckpt, strict=False)
