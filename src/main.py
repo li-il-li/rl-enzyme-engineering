@@ -15,6 +15,7 @@ from ProteinLigandGym import protein_ligand_gym_v0
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
+from supersuit import pad_action_space_v0
 
 logger = logging.getLogger(__name__)
 
@@ -24,25 +25,20 @@ def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
 
     logger.debug("Loading PettingZoo environment...")
-    env = protein_ligand_gym_v0.env(render_mode=None,
+    env = protein_ligand_gym_v0.env(render_mode="human",
                                     wildtype_aa_seq=cfg.experiment.wildtype_AA_seq,
                                     ligand_smile=cfg.experiment.ligand_smile,
                                     device=cfg.experiment.device,
                                     config=cfg)
+    env = PettingZooEnv(env)
 
-    ## Step 2: Wrap the environment for Tianshou interfacing
-    #env = PettingZooEnv(env)
+    policies = MultiAgentPolicyManager([RandomPolicy(), RandomPolicy()], env)
 
-    ## Step 3: Define policies for each agent
-    #policies = MultiAgentPolicyManager([RandomPolicy(), RandomPolicy()], env)
+    env = DummyVectorEnv([lambda: env])
 
-    ## Step 4: Convert the env to vector format
-    #env = DummyVectorEnv([lambda: env])
+    collector = Collector(policies, env)
 
-    ## Step 5: Construct the Collector, which interfaces the policies with the vectorised environment
-    #collector = Collector(policies, env)
-
-    ## Step 6: Execute the environment with the agents playing for 1 epis
+    result = collector.collect(n_episode=1, render=0.1)
 
 
 if __name__ == "__main__":

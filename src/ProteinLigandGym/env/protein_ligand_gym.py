@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from copy import copy
 from pettingzoo import AECEnv
+from pettingzoo.utils import agent_selector
 import functools
 # Hydra
 from omegaconf import DictConfig, OmegaConf
@@ -19,6 +20,8 @@ from fabind_plus_inference import init_fabind, prepare_ligand, create_FABindPipe
 # DSMBind
 from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
 
+amino_acids = ['A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+
 log = logging.getLogger(__name__)
 
 
@@ -26,6 +29,7 @@ class ProteinLigandInteractionEnv(AECEnv):
 
     metadata = {
         "name": "protein_ligand_gym_v0",
+        "render_modes": ["human"]
     }
 
     def __init__(self, render_mode=None,
@@ -49,63 +53,112 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         # Models
         self.device = device
-        log.info("Loading sequence model ...")
-        self.sequence_model, self.sequenze_tokenizer = self._init_evodiff()
-        log.info("Loading folding model ...")
-        self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
-        log.info("Loading docking model ...")
-        self.docking_model, self.structure_tokenizer, self.structure_alphabet = init_fabind(device=device)
-        log.info("Loading binding affinity prediction model ...")
-        self.ba_model = init_DSMBind(device=device)
+        #log.info("Loading sequence model ...")
+        #self.sequence_model, self.sequenze_tokenizer = self._init_evodiff()
+        #log.info("Loading folding model ...")
+        #self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
+        #log.info("Loading docking model ...")
+        #self.docking_model, self.structure_tokenizer, self.structure_alphabet = init_fabind(device=device)
+        #log.info("Loading binding affinity prediction model ...")
+        #self.ba_model = init_DSMBind(device=device)
         
-        # RL
+        # PettingZoo Env
         self.timestep = None
         self.possible_agents = ["mutation_site_picker", "mutation_site_filler"]
+        self.agent_name_mapping = dict(
+            zip(self.possible_agents, list(range(len(self.possible_agents))))
+        )
         
-        self.action_space = {
-            "mutation_site_picker": spaces.Box(low = 0,high = len(self.wildtype_aa_seq),shape = (2,),dtype=np.int32),
-            "mutation_site_filler": spaces.Text(min_length = len(self.wildtype_aa_seq), max_length = len(self.wildtype_aa_seq)) # Use AA charset
-        } 
+        # Action space is the same for both agents (Tianshou limitation)
+        max_val_for_most_elements = len(amino_acids)
+        max_val_for_last_two_elements = len(self.wildtype_aa_seq) - 1
+
+        # Create an array filled with the max_val_for_most_elements
+        high = np.full(len(self.wildtype_aa_seq)+1, max_val_for_most_elements, dtype=np.uint32)
+        # Set the max value for the last two elements as your specified value
+        high[-2:] = max_val_for_last_two_elements
+        low = np.zeros(len(self.wildtype_aa_seq)+1, dtype=np.uint32)
+        self._action_spaces = {
+            "mutation_site_picker": spaces.Box(low = low, high = high, dtype=np.uint32),
+            "mutation_site_filler": spaces.Box(low = low, high = high, dtype=np.uint32)
+        }
+        log.info(f"Shape action space: {self._action_spaces['mutation_site_picker'].shape}")
+
+        #low = np.zeros(len(self.wildtype_aa_seq)+1)
+        #high = np.full(len(self.wildtype_aa_seq)+1, len(self.wildtype_aa_seq)-1)
+        #self._action_spaces = {
+        #    "mutation_site_picker": spaces.Box(low = low,high = high,dtype=np.uint32),
+        #    "mutation_site_filler": spaces.Box(low = low,high = high,dtype=np.uint32)
+        #} 
         
-        self.observation_space = {
+        self._observation_spaces = {
             "mutation_site_picker": spaces.Dict(
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
+                    "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq)-1,shape = (2,),dtype=np.uint32),
                     "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(2,2), dtype=np.float32)
                 }
             ),
             "mutation_site_filler": spaces.Dict(
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
-                    "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq),shape = (2,),dtype=np.int32)
+                    "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq)-1,shape = (2,),dtype=np.uint32),
+                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(2,2), dtype=np.float32)
                 }
             )
         }
+        
+        self.render_mode = render_mode
+
 
     def reset(self, seed=None, options=None):
+        log.info("Executing 'reset' ...")
+
         self.agents = copy(self.possible_agents)
         self.timestep = 0
+        self._cumulative_rewards = {agent: 0 for agent in self.agents}
+        self.rewards = {agent: 0 for agent in self.agents}
+        self.terminations = {agent: False for agent in self.agents}
+        self.truncations = {agent: False for agent in self.agents}
+
         self.mutant_aa_seq = self.wildtype_aa_seq
         self.mutation_site = np.zeros(2,)
         self.protein_ligand_conformation_latent = np.zeros((2,2), dtype=np.float32)
         self.binding_affinity = 0
 
-        # We need the following line to seed self.np_random
-        super().reset(seed=seed)
+        self.observations = self._get_obs()
+        self.infos = self._get_infos()
+        
+        self._agent_selector = agent_selector(self.agents)
+        self.agent_selection = self._agent_selector.next()
 
-        observations = self._get_obs()
-        infos = self._get_infos()
+        return self.observations, self.infos
 
-        return observations, infos
+    def observe(self, agent):
+        """
+        Observe should return the observation of the specified agent. This function
+        should return a sane observation (though not necessarily the most up to date possible)
+        at any time after reset() is called.
+        """
+        # observation of one agent is the previous state of the other
+        return self.observations[agent]
 
     def step(self, action):
+        log.info(f"Action space: {self._action_spaces['mutation_site_picker'].shape}")
+        log.info(f"Executing action: {action}")
+        
         
         if self.agent_selection == "mutation_site_picker":
-            #aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
+            log.info(f"Agent in execution: {self.agent_selection}")
+            action = action[-2:]
             self.mutation_site = np.sort(action)
+            log.info(f"Filling : {self.mutation_site}")
+            #aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
 
         elif self.agent_selection == "mutation_site_filler": 
-            self.mutant_aa_seq = action
+            log.info(f"Agent in execution: {self.agent_selection}")
+            self.mutant_aa_seq = self.action_to_aa_sequence(action)
+
         
             #log.info("Sample sequences ...")
             #sample, entire_sequence, generated_idr = inpaint_simple(
@@ -152,33 +205,89 @@ class ProteinLigandInteractionEnv(AECEnv):
         
         if any(terminations.values()) or all(truncations.values()):
             self.agents = []
+        
+         # selects the next agent.
+        self.agent_selection = self._agent_selector.next()
+        # Adds .rewards to ._cumulative_rewards
+        self._accumulate_rewards()
+
+        if self.render_mode == "human":
+            self.render()
 
         return observations, rewards, terminations, truncations, infos
 
     def render(self):
+        if self.render_mode is None:
+            log.warn(
+                "You are calling render method without specifying any render mode."
+            )
+            return
+
+        if len(self.agents) == 2:
+
+            def insert_char(string, char, indexes):
+                pos_cor = 0
+                for i, index in enumerate(indexes):
+                    c = pos_cor + i
+                    string = string[:c] + char + string[c:]
+                    ++pos_cor
+                return string
+
+            sequence_edit = insert_char(self.mutant_aa_seq, "|", self.mutation_site)
+            string = f"{sequence_edit}"
+
+        else:
+            string = "!!!!!!!!!!!!   Episode finished   !!!!!!!!!!!!"
+
+        log.info(string)
+
+    def close(self):
+        """
+        Close should release any graphical displays, subprocesses, network connections
+        or any other environment data which should not be kept around after the
+        user is no longer using the environment.
+        """
         pass
 
+    @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
-        return self.observation_spaces[agent]
+        return self._observation_spaces[agent]
 
+    @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
-        return self.action_spaces[agent]
+        log.info(f"Getting action space for agent {agent}.")
+        log.info(f"Action space {self._action_spaces[agent]}.")
+        return self._action_spaces[agent]
 
     def _get_obs(self):
+        mask = np.zeros([len(self.wildtype_aa_seq)+1], dtype=bool)
+        mask[-2:] = True
+        mutation_site_picker_mask = mask
+        mutation_site_filler_mask = np.logical_not(mask)
+        log.info(f"Mutation Mask Shape: {mutation_site_filler_mask.shape}")
         return {
             "mutation_site_picker": {
-                "mutation_aa_seq": self.mutant_aa_seq,
-                "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent
+                "agent_id": self.agents[0],
+                "obs": {
+                    "mutation_aa_seq": self.mutant_aa_seq,
+                    "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
+                },
+                "mask": mutation_site_picker_mask
             },
             "mutation_site_filler": {
-                "mutation_aa_seq": self.mutant_aa_seq,
-                "mutation_site": self.mutation_site
+                "agent_id": self.agents[1],
+                "obs": {
+                    "mutation_aa_seq": self.mutant_aa_seq,
+                    "mutation_site": self.mutation_site,
+                },
+                "mask": mutation_site_filler_mask
             }
         }
 
     def _get_infos(self):
-        return { 
-            "placeholder": 10,
+        return {
+            "mutation_site_picker": {},
+            "mutation_site_filler": {}
         }
     
     def _init_evodiff(self):
@@ -186,3 +295,11 @@ class ProteinLigandInteractionEnv(AECEnv):
         model.to(device=self.device)
 
         return model, tokenizer
+    
+    def action_to_aa_sequence(self,action):
+        lookup_table_int_to_aa = {idx: amino_acid for idx, amino_acid in enumerate(amino_acids)}
+        return ''.join(lookup_table_int_to_aa[act] for act in action)
+
+    def aa_sequence_to_action(self,aa_sequence):
+        lookup_table_aa_to_int = {amino_acid: np.uint32(idx) for idx, amino_acid in enumerate(amino_acids)}
+        return np.array([lookup_table_aa_to_int[aa] for aa in aa_sequence], dtype=np.uint32)
