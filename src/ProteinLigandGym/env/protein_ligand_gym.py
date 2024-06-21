@@ -70,17 +70,14 @@ class ProteinLigandInteractionEnv(AECEnv):
         )
         
         # Action space is the same for both agents (Tianshou limitation)
-        max_val_for_most_elements = len(amino_acids)
-        max_val_for_last_two_elements = len(self.wildtype_aa_seq) - 1
-
-        # Create an array filled with the max_val_for_most_elements
-        high = np.full(len(self.wildtype_aa_seq)+1, max_val_for_most_elements, dtype=np.uint32)
-        # Set the max value for the last two elements as your specified value
-        high[-2:] = max_val_for_last_two_elements
-        low = np.zeros(len(self.wildtype_aa_seq)+1, dtype=np.uint32)
+        action_space = spaces.Box(
+            low=np.array([0] * (len(self.wildtype_aa_seq) + 2)),
+            high=np.array([len(amino_acids)-1] * len(self.wildtype_aa_seq) + [len(self.wildtype_aa_seq) - 1] * 2),
+            dtype=np.int32
+        )
         self._action_spaces = {
-            "mutation_site_picker": spaces.Box(low = low, high = high, dtype=np.uint32),
-            "mutation_site_filler": spaces.Box(low = low, high = high, dtype=np.uint32)
+            "mutation_site_picker": action_space,
+            "mutation_site_filler": action_space
         }
         log.info(f"Shape action space: {self._action_spaces['mutation_site_picker'].shape}")
 
@@ -260,11 +257,15 @@ class ProteinLigandInteractionEnv(AECEnv):
         return self._action_spaces[agent]
 
     def _get_obs(self):
-        mask = np.zeros([len(self.wildtype_aa_seq)+1], dtype=bool)
-        mask[-2:] = True
-        mutation_site_picker_mask = mask
-        mutation_site_filler_mask = np.logical_not(mask)
+        
+        mask = np.eye(len(self.wildtype_aa_seq)+2, dtype=bool)
+        mask[-2:, -2:] = False
+
+        mutation_site_picker_mask = ~mask
+        mutation_site_filler_mask = mask
+        
         log.info(f"Mutation Mask Shape: {mutation_site_filler_mask.shape}")
+        log.info(f"Mutation Mask: {mutation_site_filler_mask}")
         return {
             "mutation_site_picker": {
                 "agent_id": self.agents[0],
