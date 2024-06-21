@@ -15,6 +15,7 @@ from ProteinLigandGym import protein_ligand_gym_v0
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
+from ProteinSequencePolicy.policy import ProteinSequencePolicy
 from supersuit import pad_action_space_v0
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ def main(cfg: DictConfig):
                                     config=cfg)
     env = PettingZooEnv(env)
 
-    policies = MultiAgentPolicyManager([RandomPolicy(), RandomPolicy()], env)
+    policies = MultiAgentPolicyManager([RandomPolicy(), ProteinSequencePolicy(device=cfg.experiment.device)], env)
 
     env = DummyVectorEnv([lambda: env])
 

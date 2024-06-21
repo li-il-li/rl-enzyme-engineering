@@ -10,9 +10,6 @@ import functools
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
-# EvoDiff
-from evodiff.pretrained import OA_DM_38M, OA_DM_640M
-from evodiff.conditional_generation import inpaint_simple
 # AlphaFlow
 from ProteinLigandGym.env.alphaflow_inference import init_esmflow, generate_conformation_ensemble
 # FABind+
@@ -53,8 +50,6 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         # Models
         self.device = device
-        #log.info("Loading sequence model ...")
-        #self.sequence_model, self.sequenze_tokenizer = self._init_evodiff()
         #log.info("Loading folding model ...")
         #self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
         #log.info("Loading docking model ...")
@@ -81,13 +76,6 @@ class ProteinLigandInteractionEnv(AECEnv):
         }
         log.info(f"Shape action space: {self._action_spaces['mutation_site_picker'].shape}")
 
-        #low = np.zeros(len(self.wildtype_aa_seq)+1)
-        #high = np.full(len(self.wildtype_aa_seq)+1, len(self.wildtype_aa_seq)-1)
-        #self._action_spaces = {
-        #    "mutation_site_picker": spaces.Box(low = low,high = high,dtype=np.uint32),
-        #    "mutation_site_filler": spaces.Box(low = low,high = high,dtype=np.uint32)
-        #} 
-        
         self._observation_spaces = {
             "mutation_site_picker": spaces.Dict(
                 {
@@ -156,17 +144,6 @@ class ProteinLigandInteractionEnv(AECEnv):
             log.info(f"Agent in execution: {self.agent_selection}")
             self.mutant_aa_seq = self.action_to_aa_sequence(action)
 
-        
-            #log.info("Sample sequences ...")
-            #sample, entire_sequence, generated_idr = inpaint_simple(
-            #    self.sequence_model,
-            #    self.mutant_aa_seq,
-            #    aa_seq_hole_start_idx,
-            #    aa_seq_hole_end_idx,
-            #    tokenizer=self.sequenze_tokenizer,
-            #    device=self.device
-            #)
-        
             log.info("Generate conformations ...")
             conformation_structures, pdb_files = generate_conformation_ensemble(self.folding_model,
                                                                      self.config,
@@ -290,12 +267,6 @@ class ProteinLigandInteractionEnv(AECEnv):
             "mutation_site_picker": {},
             "mutation_site_filler": {}
         }
-    
-    def _init_evodiff(self):
-        model, collater, tokenizer, scheme = OA_DM_640M()
-        model.to(device=self.device)
-
-        return model, tokenizer
     
     def action_to_aa_sequence(self,action):
         lookup_table_int_to_aa = {idx: amino_acid for idx, amino_acid in enumerate(amino_acids)}
