@@ -1,0 +1,19 @@
+name: bind
+channels:
+  - defaults
+dependencies:
+  - pip=23.3.1
+  - python=3.11.8
+  - pip:
+      - biopython==1.83
+      - huggingface-hub==0.22.2
+      - networkx==3.3
+      - pandas==2.2.2
+      - pysmiles==1.1.2
+      - tokenizers==0.15.2
+      - torch==2.2.0
+      - torch-geometric==2.4.0
+      - tqdm==4.66.2
+      - transformers==4.37.2
+      - typing-extensions
+      - tensorboard==2.16.2
