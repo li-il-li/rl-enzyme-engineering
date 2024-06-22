@@ -237,6 +237,8 @@ class ProteinLigandInteractionEnv(AECEnv):
         
         mask = np.eye(len(self.wildtype_aa_seq)+2, dtype=bool)
         mask[-2:, -2:] = False
+        #mask = np.ones(len(self.wildtype_aa_seq)+2, dtype=bool)
+        #mask[-2:] = False
 
         mutation_site_picker_mask = ~mask
         mutation_site_filler_mask = mask

@@ -5,12 +5,21 @@ from evodiff.conditional_generation import inpaint_simple
 import numpy as np
 import logging
 import ProteinSequencePolicy.fsa as fsa
+import gymnasium as gym
 
 log = logging.getLogger(__name__)
 
 class ProteinSequencePolicy(BasePolicy):
-    def __init__(self, device):
-        super().__init__()
+    def __init__(
+            self,
+            action_space: gym.Space,
+            device,
+        ):
+
+        super().__init__(
+            action_space=action_space
+        )
+
         log.info("Loading sequence model...")
         self.device = device
         self.sequence_model, self.sequenze_tokenizer = self._init_evodiff(device)
@@ -42,11 +51,16 @@ class ProteinSequencePolicy(BasePolicy):
         
         encoded_sequence = fsa.aa_sequence_to_action(entire_sequence)
         
-        action = self.action_space
-        log.info(f"Action: {action}")
-        print()
+        action_space = self.action_space
+        mask = batch.obs.mask[0]
+        log.info(f"Actionspace: {action_space.shape}")
+        log.info(f"Mask: {mask.shape}")
         
-        return Batch(act=action) 
+        action = np.zeros(action_space.shape)
+        action[:len(encoded_sequence)] = encoded_sequence
+        log.info(f"Action: {action}")
+        
+        return Batch(act=[action]) 
 
     def learn(self, batch, **kwargs):
         """This is a random policy, so no learning is involved."""

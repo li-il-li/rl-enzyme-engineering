@@ -33,7 +33,16 @@ def main(cfg: DictConfig):
                                     config=cfg)
     env = PettingZooEnv(env)
 
-    policies = MultiAgentPolicyManager([RandomPolicy(), ProteinSequencePolicy(device=cfg.experiment.device)], env)
+    policies = MultiAgentPolicyManager(
+        [
+            RandomPolicy(),
+            ProteinSequencePolicy(
+                action_space=env.action_space,
+                device=cfg.experiment.device
+            )
+        ],
+        env
+    )
 
     env = DummyVectorEnv([lambda: env])
 
