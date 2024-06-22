@@ -1,7 +1,7 @@
 import modified_smiles_parser as pysmiles
 import networkx
 
-from data import NodeInfo, EdgeInfo, lookup_atom_type, lookup_bond_type
+from .data import NodeInfo, EdgeInfo, lookup_atom_type, lookup_bond_type
 
 def parse_smiles(
         input: str,
@@ -10,8 +10,7 @@ def parse_smiles(
         only_biggest=False,
         split_ions=False,
         unknown_atom_is_dummy=False
-) -> (
-        list[map], list[list[int]], list[map], list[tuple]):  # x, a, e, paths
+) -> (list[map], list[list[int]], list[map], list[tuple]):  # x, a, e, paths
 
     # Substitutions
     #for replace_from, replace_to in metallole_substitutions.items():

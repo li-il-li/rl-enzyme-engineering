@@ -50,7 +50,6 @@ sequences = list(SeqIO.parse(protein_file, "fasta"))
 all_smiles = [x.split()[0] for x in open(ligand_file).read().split("\n") if len(x.split()) > 0]
 
 def get_graph (smiles):
-
     graph = loading.get_data(smiles, apply_paths=False, parse_cis_trans=False, unknown_atom_is_dummy=True)
     x, a, e = loading.convert(*graph, bonds=[BondType.SINGLE, BondType.DOUBLE, BondType.TRIPLE, BondType.AROMATIC, BondType.NOT_CONNECTED])
 

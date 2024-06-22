@@ -16,6 +16,9 @@ from ProteinLigandGym.env.alphaflow_inference import init_esmflow, generate_conf
 from fabind_plus_inference import init_fabind, prepare_ligand, create_FABindPipelineDataset, dock_proteins_ligand
 # DSMBind
 from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
+# BIND
+from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder
+
 
 amino_acids = ['A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
 
@@ -34,12 +37,12 @@ class ProteinLigandInteractionEnv(AECEnv):
                  ligand_smile: str = 'SMILE',
                  device = 'cuda',
                  config={}):
-        log.info("Initializing environment...")
+        log.debug("Initializing environment...")
         
         # Hydra Config
         self.config = config
 
-        log.info(f"Preparing Ligand: {ligand_smile}")
+        log.debug(f"Preparing Ligand: {ligand_smile}")
         # Ligand
         self.ligand_dict = {}
         self.ligand_dict['smile'] = ligand_smile
@@ -50,6 +53,9 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         # Models
         self.device = device
+        log.debug("Loading sequence based binding affinity model ...")
+        self.ba_model, self.esm_model, self.esm_tokeniser = init_BIND(device) # still small model
+
         #log.info("Loading folding model ...")
         #self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
         #log.info("Loading docking model ...")
@@ -74,7 +80,7 @@ class ProteinLigandInteractionEnv(AECEnv):
             "mutation_site_picker": action_space,
             "mutation_site_filler": action_space
         }
-        log.info(f"Shape action space: {self._action_spaces['mutation_site_picker'].shape}")
+        log.debug(f"Shape action space: {self._action_spaces['mutation_site_picker'].shape}")
 
         self._observation_spaces = {
             "mutation_site_picker": spaces.Dict(
@@ -129,35 +135,42 @@ class ProteinLigandInteractionEnv(AECEnv):
         return self.observations[agent]
 
     def step(self, action):
-        log.info(f"Action space: {self._action_spaces['mutation_site_picker'].shape}")
-        log.info(f"Executing action: {action}")
+        log.debug(f"Action space: {self._action_spaces['mutation_site_picker'].shape}")
+        log.debug(f"Executing action: {action}")
         
         
         if self.agent_selection == "mutation_site_picker":
-            log.info(f"Agent in execution: {self.agent_selection}")
+            log.debug(f"Agent in execution: {self.agent_selection}")
             action = action[-2:]
             self.mutation_site = np.sort(action)
-            log.info(f"Filling : {self.mutation_site}")
+            log.debug(f"Filling : {self.mutation_site}")
             #aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
 
         elif self.agent_selection == "mutation_site_filler": 
             log.info(f"Agent in execution: {self.agent_selection}")
             self.mutant_aa_seq = self.action_to_aa_sequence(action)
+            
+            # TODO add if else for structure or sequence based training
 
-            log.info("Generate conformations ...")
-            conformation_structures, pdb_files = generate_conformation_ensemble(self.folding_model,
-                                                                     self.config,
-                                                                     [self.mutant_aa_seq])
-            self.conformation_structures = conformation_structures
+            #log.info("Generate conformations ...")
+            #conformation_structures, pdb_files = generate_conformation_ensemble(self.folding_model,
+            #                                                         self.config,
+            #                                                         [self.mutant_aa_seq])
+            #self.conformation_structures = conformation_structures
+            #
+            #log.info("Dock Proteins to ligand ...")
+            #fabind_dataset = create_FABindPipelineDataset(conformation_structures,
+            #                                              self.ligand_dict,
+            #                                              self.structure_tokenizer,
+            #                                              self.structure_alphabet)
+            #protein_ligand_conformations_mols = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
+            #
+            #self.binding_affinity = self.ba_model.virtual_screen(pdb_files[0], protein_ligand_conformations_mols)
             
-            log.info("Dock Proteins to ligand ...")
-            fabind_dataset = create_FABindPipelineDataset(conformation_structures,
-                                                          self.ligand_dict,
-                                                          self.structure_tokenizer,
-                                                          self.structure_alphabet)
-            protein_ligand_conformations_mols = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
+            score = predict_binder(self.ba_model, self.esm_model, self.esm_tokeniser, self.device,
+                                   [self.mutant_aa_seq], self.ligand_dict['smile'])
             
-            self.binding_affinity = self.ba_model.virtual_screen(pdb_files[0], protein_ligand_conformations_mols)
+            self.binding_affinity = score[0]['non_binder_prob']
 
         rewards = {
             "mutation_site_picker": self.binding_affinity,

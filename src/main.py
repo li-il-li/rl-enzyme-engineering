@@ -2,6 +2,7 @@ import sys
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models/AlphaFlow")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models/FABind/FABind_plus/fabind")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models/DSMBind")
+sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models/BIND/")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env")
 

@@ -1,7 +1,7 @@
 import json
 import os
 
-import smiles_parser
+from . import smiles_parser
 
 dir_path = os.path.dirname(os.path.realpath(__file__)) + "/"
 
