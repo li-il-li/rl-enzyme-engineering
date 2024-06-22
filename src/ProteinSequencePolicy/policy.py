@@ -4,6 +4,7 @@ from evodiff.pretrained import OA_DM_38M, OA_DM_640M
 from evodiff.conditional_generation import inpaint_simple
 import numpy as np
 import logging
+import ProteinSequencePolicy.fsa as fsa
 
 log = logging.getLogger(__name__)
 
@@ -18,16 +19,13 @@ class ProteinSequencePolicy(BasePolicy):
         """Compute action over the given batch data."""
 
         n = len(batch.obs)  # number of states in the batch
-        actions = np.random.randint(
-            low=0, high=2, size=n, dtype=np.int64
-        )
 
         log.info(f"ProtSeqPolicy Batch: {batch}")
         log.info(f"ProtSeqPolicy Batch Observation: {batch.obs}")
 
         log.info(f"Sample sequence...")
         mutant_sequence = batch.obs.obs.mutation_aa_seq[0]
-        mutation_site_start_idx, mutation_site_end_idx = batch.obs.obs.mutation_site[0]
+        mutation_site_start_idx, mutation_site_end_idx = batch.obs.obs.mutation_site[0].astype(int)
         
         log.info(f"Mutant sequence: {mutant_sequence}")
         log.info(f"Mutation sites: {mutation_site_start_idx, mutation_site_end_idx}")
@@ -40,9 +38,15 @@ class ProteinSequencePolicy(BasePolicy):
             device=self.device
         )
 
-        log.info(f"Mutation: ${entire_sequence}")
+        log.info(f"Mutation: {entire_sequence}")
         
-        return Batch(act=actions) 
+        encoded_sequence = fsa.aa_sequence_to_action(entire_sequence)
+        
+        action = self.action_space
+        log.info(f"Action: {action}")
+        print()
+        
+        return Batch(act=action) 
 
     def learn(self, batch, **kwargs):
         """This is a random policy, so no learning is involved."""
