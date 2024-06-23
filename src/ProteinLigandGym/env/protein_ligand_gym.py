@@ -54,7 +54,11 @@ class ProteinLigandInteractionEnv(AECEnv):
         # Models
         self.device = device
         log.debug("Loading sequence based binding affinity model ...")
-        self.ba_model, self.esm_model, self.esm_tokeniser = init_BIND(device) # still small model
+        self.ba_model, self.get_ba_activations, self.esm_model, self.esm_tokeniser = init_BIND(device) # still small model
+        self.protein_ligand_conformation_latent = self.get_ba_activations()
+        log.info(f"ProteinLigand conformation latent: {self.protein_ligand_conformation_latent}")
+
+        #print(f"BIND model: {self.ba_model}")
 
         #log.info("Loading folding model ...")
         #self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
@@ -87,14 +91,14 @@ class ProteinLigandInteractionEnv(AECEnv):
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq)-1,shape = (2,),dtype=np.uint32),
-                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(2,2), dtype=np.float32)
+                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=self.protein_ligand_conformation_latent.shape, dtype=np.float32)
                 }
             ),
             "mutation_site_filler": spaces.Dict(
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq)-1,shape = (2,),dtype=np.uint32),
-                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(2,2), dtype=np.float32)
+                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=self.protein_ligand_conformation_latent.shape, dtype=np.float32)
                 }
             )
         }
@@ -147,7 +151,7 @@ class ProteinLigandInteractionEnv(AECEnv):
             #aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
 
         elif self.agent_selection == "mutation_site_filler": 
-            log.info(f"Agent in execution: {self.agent_selection}")
+            log.debug(f"Agent in execution: {self.agent_selection}")
             self.mutant_aa_seq = self.action_to_aa_sequence(action)
             
             # TODO add if else for structure or sequence based training
@@ -171,6 +175,8 @@ class ProteinLigandInteractionEnv(AECEnv):
                                    [self.mutant_aa_seq], self.ligand_dict['smile'])
             
             self.binding_affinity = score[0]['non_binder_prob']
+            log.info(f"Activations: {self._get_ba_model_activation()}")
+            
 
         rewards = {
             "mutation_site_picker": self.binding_affinity,
@@ -242,8 +248,8 @@ class ProteinLigandInteractionEnv(AECEnv):
 
     @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
-        log.info(f"Getting action space for agent {agent}.")
-        log.info(f"Action space {self._action_spaces[agent]}.")
+        log.debug(f"Getting action space for agent {agent}.")
+        log.debug(f"Action space {self._action_spaces[agent]}.")
         return self._action_spaces[agent]
 
     def _get_obs(self):
@@ -256,8 +262,8 @@ class ProteinLigandInteractionEnv(AECEnv):
         mutation_site_picker_mask = ~mask
         mutation_site_filler_mask = mask
         
-        log.info(f"Mutation Mask Shape: {mutation_site_filler_mask.shape}")
-        log.info(f"Mutation Mask: {mutation_site_filler_mask}")
+        log.debug(f"Mutation Mask Shape: {mutation_site_filler_mask.shape}")
+        log.debug(f"Mutation Mask: {mutation_site_filler_mask}")
         return {
             "mutation_site_picker": {
                 "agent_id": self.agents[0],
@@ -282,6 +288,9 @@ class ProteinLigandInteractionEnv(AECEnv):
             "mutation_site_picker": {},
             "mutation_site_filler": {}
         }
+    
+    def _get_ba_model_activation(self):
+        return self.get_ba_activations()
     
     def action_to_aa_sequence(self,action):
         lookup_table_int_to_aa = {idx: amino_acid for idx, amino_acid in enumerate(amino_acids)}

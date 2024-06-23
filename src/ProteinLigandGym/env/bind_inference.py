@@ -13,6 +13,8 @@ from torch_geometric.data import Data
 from tqdm import tqdm
 from Bio import SeqIO
 
+log = logging.getLogger(__name__)
+
 def predict_binder(bind_model, esm_model, esm_tokeniser, device, sequences, ligand_smile):
 
     all_scores = []
@@ -29,7 +31,7 @@ def predict_binder(bind_model, esm_model, esm_tokeniser, device, sequences, liga
         ligand = get_graph(ligand_smile)
 
         current_graphs = Batch.from_data_list([ligand]).to(device).detach()
-        output, intermediate_activations = bind_model.forward(current_graphs, hidden_states, attention_mask, return_intermediate=True)
+        output = bind_model.forward(current_graphs, hidden_states, attention_mask)
 
         output = [x.detach().cpu().numpy() for x in output]
         probability = sigmoid(output[-1])
@@ -61,8 +63,20 @@ def init_BIND(device):
     model = torch.load("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models/BIND/saves/BIND_checkpoint_12042024.pth", map_location=device)
     model.eval()
     model.to(device)
+    
+    dense2_out_features = model.dense2.out_features
+    activation = torch.empty(1, dense2_out_features).to('cpu')
+    
+    def hook_fn(module, input, output):
+        nonlocal activation
+        activation = output.detach().cpu()
+    
+    hook = model.dense2.register_forward_hook(hook_fn)
 
-    return model, esm_model, esm_tokeniser
+    def get_activation():
+        return activation.numpy()
+
+    return model, get_activation, esm_model, esm_tokeniser
 
 
 def get_graph(smiles):
