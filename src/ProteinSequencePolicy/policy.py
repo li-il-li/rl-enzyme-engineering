@@ -20,7 +20,7 @@ class ProteinSequencePolicy(BasePolicy):
             action_space=action_space
         )
 
-        log.info("Loading sequence model...")
+        log.debug("Loading sequence model...")
         self.device = device
         self.sequence_model, self.sequenze_tokenizer = self._init_evodiff(device)
 
@@ -29,15 +29,15 @@ class ProteinSequencePolicy(BasePolicy):
 
         n = len(batch.obs)  # number of states in the batch
 
-        log.info(f"ProtSeqPolicy Batch: {batch}")
-        log.info(f"ProtSeqPolicy Batch Observation: {batch.obs}")
+        #log.info(f"ProtSeqPolicy Batch Observation: {batch.obs}")
+        #log.info(f"ProtSeqPolicy Batch: {batch}")
 
-        log.info(f"Sample sequence...")
-        mutant_sequence = batch.obs.obs.mutation_aa_seq[0]
-        mutation_site_start_idx, mutation_site_end_idx = batch.obs.obs.mutation_site[0].astype(int)
+        log.debug(f"Sample sequence...")
+        mutant_sequence = batch.obs.mutation_aa_seq[0]
+        mutation_site_start_idx, mutation_site_end_idx = batch.obs.mutation_site[0].astype(int)
         
-        log.info(f"Mutant sequence: {mutant_sequence}")
-        log.info(f"Mutation sites: {mutation_site_start_idx, mutation_site_end_idx}")
+        log.debug(f"Mutant sequence: {mutant_sequence}")
+        log.debug(f"Mutation Sites Batch Ops: {mutation_site_start_idx, mutation_site_end_idx}")
         
         sample, entire_sequence, generated_idr = inpaint_simple(
             self.sequence_model,
@@ -47,18 +47,18 @@ class ProteinSequencePolicy(BasePolicy):
             device=self.device
         )
 
-        log.info(f"Mutation: {entire_sequence}")
+        log.debug(f"Mutation: {entire_sequence}")
         
         encoded_sequence = fsa.aa_sequence_to_action(entire_sequence)
         
         action_space = self.action_space
         mask = batch.obs.mask[0]
-        log.info(f"Actionspace: {action_space.shape}")
-        log.info(f"Mask: {mask.shape}")
+        log.debug(f"Actionspace: {action_space.shape}")
+        log.debug(f"Mask: {mask.shape}")
         
         action = np.zeros(action_space.shape)
         action[:len(encoded_sequence)] = encoded_sequence
-        log.info(f"Action: {action}")
+        log.debug(f"Action: {action}")
         
         return Batch(act=[action]) 
 

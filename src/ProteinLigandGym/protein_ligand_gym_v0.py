@@ -13,6 +13,5 @@ def env(render_mode=None,
     """
     
     env = ProteinLigandInteractionEnv(render_mode, wildtype_aa_seq, ligand_smile, device, config)
-    #env = pad_action_space_v0(env)
 
     return env

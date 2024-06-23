@@ -53,12 +53,9 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         # Models
         self.device = device
-        log.debug("Loading sequence based binding affinity model ...")
-        self.ba_model, self.get_ba_activations, self.esm_model, self.esm_tokeniser = init_BIND(device) # still small model
-        self.protein_ligand_conformation_latent = self.get_ba_activations()
-        log.info(f"ProteinLigand conformation latent: {self.protein_ligand_conformation_latent}")
 
-        #print(f"BIND model: {self.ba_model}")
+        log.debug("Loading sequence based binding affinity model ...")
+        self.ba_model, self.get_ba_activations, self.latent_vector_size, self.esm_model, self.esm_tokeniser = init_BIND(device) # still small model
 
         #log.info("Loading folding model ...")
         #self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
@@ -91,14 +88,14 @@ class ProteinLigandInteractionEnv(AECEnv):
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq)-1,shape = (2,),dtype=np.uint32),
-                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=self.protein_ligand_conformation_latent.shape, dtype=np.float32)
+                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32)
                 }
             ),
             "mutation_site_filler": spaces.Dict(
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq)-1,shape = (2,),dtype=np.uint32),
-                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=self.protein_ligand_conformation_latent.shape, dtype=np.float32)
+                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32)
                 }
             )
         }
@@ -111,14 +108,14 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         self.agents = copy(self.possible_agents)
         self.timestep = 0
-        self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.rewards = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
 
         self.mutant_aa_seq = self.wildtype_aa_seq
         self.mutation_site = np.zeros(2,)
-        self.protein_ligand_conformation_latent = np.zeros((2,2), dtype=np.float32)
+        self.protein_ligand_conformation_latent = np.zeros((self.latent_vector_size), dtype=np.float32)
         self.binding_affinity = 0
 
         self.observations = self._get_obs()
@@ -141,18 +138,19 @@ class ProteinLigandInteractionEnv(AECEnv):
     def step(self, action):
         log.debug(f"Action space: {self._action_spaces['mutation_site_picker'].shape}")
         log.debug(f"Executing action: {action}")
-        
+        log.debug("Step")
         
         if self.agent_selection == "mutation_site_picker":
             log.debug(f"Agent in execution: {self.agent_selection}")
             action = action[-2:]
             self.mutation_site = np.sort(action)
-            log.debug(f"Filling : {self.mutation_site}")
+            log.debug(f"Mutation site: {self.mutation_site}")
             #aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
 
         elif self.agent_selection == "mutation_site_filler": 
             log.debug(f"Agent in execution: {self.agent_selection}")
             self.mutant_aa_seq = self.action_to_aa_sequence(action)
+            log.debug(f"Action sequence: {self.mutant_aa_seq}")
             
             # TODO add if else for structure or sequence based training
 
@@ -175,28 +173,28 @@ class ProteinLigandInteractionEnv(AECEnv):
                                    [self.mutant_aa_seq], self.ligand_dict['smile'])
             
             self.binding_affinity = score[0]['non_binder_prob']
-            log.info(f"Activations: {self._get_ba_model_activation()}")
-            
+            self.protein_ligand_conformation_latent = self._get_ba_model_activation()
 
-        rewards = {
-            "mutation_site_picker": self.binding_affinity,
-            "mutation_site_filler": self.binding_affinity
+            self.timestep += 1
+
+        self.rewards = {
+            "mutation_site_picker": float(self.binding_affinity),
+            "mutation_site_filler": float(self.binding_affinity)
         }
 
         # Check termination conditions
         # Check model properties (if folding prop is too low)
-        terminations = { "mutation_site_picker": False, "mutation_site_filler": False}
+        self.terminations = { "mutation_site_picker": False, "mutation_site_filler": False}
         
         # Check truncation conditions (overwrites termination conditions)
-        truncations = { "mutation_site_picker": False, "mutation_site_filler": False}
-        if self.timestep > 15: # Make configurable
-            truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
-        self.timestep += 1
+        self.truncations = { "mutation_site_picker": False, "mutation_site_filler": False}
+        if self.timestep == 15: # Make configurable
+            self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
 
-        observations = self._get_obs()
-        infos = self._get_infos()
+        self.observations = self._get_obs()
+        self.infos = self._get_infos()
         
-        if any(terminations.values()) or all(truncations.values()):
+        if any(self.terminations.values()) or all(self.truncations.values()):
             self.agents = []
         
          # selects the next agent.
@@ -204,10 +202,6 @@ class ProteinLigandInteractionEnv(AECEnv):
         # Adds .rewards to ._cumulative_rewards
         self._accumulate_rewards()
 
-        if self.render_mode == "human":
-            self.render()
-
-        return observations, rewards, terminations, truncations, infos
 
     def render(self):
         if self.render_mode is None:
@@ -217,21 +211,27 @@ class ProteinLigandInteractionEnv(AECEnv):
             return
 
         if len(self.agents) == 2:
+            
+            # Condition is because as part of the step we call .next and only then render() gets called
+            if self.agent_selection == "mutation_site_filler":
+                def replace_chars(string, char, interval):
+                    char_list = list(string)
+                    start, end = interval
+                    if start < 0 or end >= len(char_list) or start > end:
+                        log.error("Invalid interval")
+                        return string
+                    for i in range(start, end + 1):
+                        char_list[i] = char
+                    return ''.join(char_list)
 
-            def insert_char(string, char, indexes):
-                pos_cor = 0
-                for i, index in enumerate(indexes):
-                    c = pos_cor + i
-                    string = string[:c] + char + string[c:]
-                    ++pos_cor
-                return string
+                sequence_edit = replace_chars(self.mutant_aa_seq, "_", self.mutation_site)
+                string = f"{sequence_edit}"
 
-            sequence_edit = insert_char(self.mutant_aa_seq, "|", self.mutation_site)
-            string = f"{sequence_edit}"
+            elif self.agent_selection == "mutation_site_picker":
+                string = self.mutant_aa_seq
 
         else:
             string = "!!!!!!!!!!!!   Episode finished   !!!!!!!!!!!!"
-
         log.info(string)
 
     def close(self):
@@ -244,6 +244,7 @@ class ProteinLigandInteractionEnv(AECEnv):
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
+        log.info('Getting observations space')
         return self._observation_spaces[agent]
 
     @functools.lru_cache(maxsize=None)
@@ -267,18 +268,16 @@ class ProteinLigandInteractionEnv(AECEnv):
         return {
             "mutation_site_picker": {
                 "agent_id": self.agents[0],
-                "obs": {
-                    "mutation_aa_seq": self.mutant_aa_seq,
-                    "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
-                },
+                "mutation_aa_seq": self.mutant_aa_seq,
+                "mutation_site": self.mutation_site,
+                "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
                 "mask": mutation_site_picker_mask
             },
             "mutation_site_filler": {
                 "agent_id": self.agents[1],
-                "obs": {
-                    "mutation_aa_seq": self.mutant_aa_seq,
-                    "mutation_site": self.mutation_site,
-                },
+                "mutation_aa_seq": self.mutant_aa_seq,
+                "mutation_site": self.mutation_site,
+                "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
                 "mask": mutation_site_filler_mask
             }
         }

@@ -64,8 +64,7 @@ def init_BIND(device):
     model.eval()
     model.to(device)
     
-    dense2_out_features = model.dense2.out_features
-    activation = torch.empty(1, dense2_out_features).to('cpu')
+    activation = None
     
     def hook_fn(module, input, output):
         nonlocal activation
@@ -76,7 +75,7 @@ def init_BIND(device):
     def get_activation():
         return activation.numpy()
 
-    return model, get_activation, esm_model, esm_tokeniser
+    return model, get_activation, model.dense2.out_features, esm_model, esm_tokeniser
 
 
 def get_graph(smiles):

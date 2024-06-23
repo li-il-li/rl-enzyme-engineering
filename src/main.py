@@ -9,7 +9,7 @@ sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env")
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-from tianshou.data import Collector
+from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.env import DummyVectorEnv, PettingZooEnv
 from tianshou.policy import MultiAgentPolicyManager, RandomPolicy
 from ProteinLigandGym import protein_ligand_gym_v0
@@ -18,6 +18,8 @@ import hydra
 import logging
 from ProteinSequencePolicy.policy import ProteinSequencePolicy
 from supersuit import pad_action_space_v0
+import numpy as np
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +48,18 @@ def main(cfg: DictConfig):
     )
 
     env = DummyVectorEnv([lambda: env])
+    
+    # seed
+    seed = 1
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    env.seed(seed)
 
-    collector = Collector(policies, env)
+    collector = Collector(
+        policies,
+        env,
+        VectorReplayBuffer(20_000, len(env)), 
+    )
 
     result = collector.collect(n_episode=1, render=0.1)
 
