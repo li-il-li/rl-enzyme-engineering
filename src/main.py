@@ -17,7 +17,7 @@ import time
 import os
 import torch
 from torch import nn
-from torch.distributions import Categorical, Distribution
+from torch.distributions import Categorical, Distribution, Independent
 from torch.optim.lr_scheduler import LambdaLR
 from ProteinSequencePolicy.policy import ProteinSequencePolicy
 from ProteinLigandGym import protein_ligand_gym_v0
@@ -25,30 +25,38 @@ from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.env import DummyVectorEnv, PettingZooEnv
 from tianshou.policy import MultiAgentPolicyManager, RandomPolicy, PPOPolicy
 from tianshou.trainer import OnpolicyTrainer
-from tianshou.utils.net.common import ActorCritic
+from tianshou.utils.net.common import ActorCritic, Net, MLP
 from tianshou.utils.net.discrete import Actor, Critic
 #from common import TrainLogger
 
 logger = logging.getLogger(__name__)
 
-class Net(nn.Module):
-    def __init__(self, state_shape, action_shape):
+class CustomNet(nn.Module):
+    def __init__(self, state_shape, action_shape, hidden_sizes, device):
         super().__init__()
-        self.model = nn.Sequential(
-            nn.Linear(np.prod(state_shape), 128), nn.ReLU(inplace=True),
-            nn.Linear(128, 128), nn.ReLU(inplace=True),
-            nn.Linear(128, 128), nn.ReLU(inplace=True),
-            nn.Linear(128, np.prod(action_shape)),
+        self._device = device
+        self.model = MLP(
+            int(np.prod(state_shape)),
+            int(np.prod(action_shape)),
+            hidden_sizes,
+            device=device
         )
+        self.action_shape = action_shape
+        self.output_dim = self.model.output_dim
+        self.input_dim = int(np.prod(state_shape))
 
-    def forward(self, obs, state=None, info={}):
-        if not isinstance(obs, torch.Tensor):
-            obs = torch.tensor(obs, dtype=torch.float)
-        batch = obs.shape[0]
-        logits = self.model(obs.view(batch, -1))
+    def forward(self, obs, state=None, info=None):
+        obs = obs.protein_ligand_conformation_latent
+        logger.info(f"Obs Preprocess Network: {obs.shape}")
+        obs = torch.as_tensor(obs, device=self._device, dtype=torch.float32)
+        logits = self.model(obs)
         return logits, state
+    
+    def get_output_dim(self):
+        return self.output_dim
 
-
+    def get_input_dim(self):
+        return self.input_dim
 
 
 @hydra.main(version_base=None, config_path="../conf/", config_name='conf_dev')
@@ -71,7 +79,6 @@ def main(cfg: DictConfig):
     # Model PPO
     state_shape = env.observation_space['protein_ligand_conformation_latent'].shape
     action_shape = env.action_space.shape
-    print(env.action_space.shape)
 
     # seed
     # TODO make seed cfg.seed
@@ -79,8 +86,10 @@ def main(cfg: DictConfig):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    net = Net(state_shape, action_shape)
-    actor = Actor(net, action_shape, softmax_output=False, device=device)
+    logger.info(f"Action Space shape: {action_shape}")
+    net = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[128]*4, device=device)
+    logger.info(f"Net: {net}")
+    actor = Actor(preprocess_net=net, action_shape=action_shape, softmax_output=False,device=device)
     critic = Critic(net, device=device)
     
     def actor_init(layer):
@@ -99,17 +108,19 @@ def main(cfg: DictConfig):
     optim = torch.optim.Adam(
         ActorCritic(actor, critic).parameters(), lr=2.5e-4, eps=1e-5
     )
-    
+
     def dist(logits: torch.Tensor) -> Distribution:
-        return Categorical(logits=logits)
+        logger.info(f"Logits: {logits}")
+        dist = Independent(Categorical(logits=logits), 1)
+        logger.info(f"Action Dist: {dist.sample()}")
+        return dist
     
     # decay learning rate to 0 linearly
-    step_per_collect = 100
-    step_per_epoch = 128 * 8
-    epoch = int(10000000 // (128 * 8))
     #lr_scheduler = LambdaLR(optim, lr_lambda=lambda e: 1 - e / epoch)
     
     # PPO policy
+    logger.info(f"Observation Space: {env.observation_space['protein_ligand_conformation_latent']}")
+    logger.info(f"Action Space Picker: {env.action_space}")
     ppo_policy: PPOPolicy = PPOPolicy(
         actor=actor,
         critic=critic,
@@ -126,26 +137,26 @@ def main(cfg: DictConfig):
         max_grad_norm=0.5,
         gae_lambda=0.95,
         discount_factor=0.99,
-        reward_normalization=False,
+        reward_normalization=True, # 5.1 Value Normalization
         deterministic_eval=False,
-        observation_space=env.observation_space,
+        observation_space=env.observation_space['protein_ligand_conformation_latent'],
         action_scaling=False,
         lr_scheduler=None,
         #lr_scheduler=lr_scheduler,
     ).to(device)
     
     buffer = VectorReplayBuffer(
-        128 * 8,
-        buffer_num=len(env), # TODO validate
+        total_size=10000,
+        buffer_num=1,
         ignore_obs_next=True,
         save_only_last_obs=True,
-        stack_num=4,
+        stack_num=1,
     )
 
     policies = MultiAgentPolicyManager(
         [
             #RandomPolicy(),
-            ppo_policy(),
+            ppo_policy,
             ProteinSequencePolicy(
                 action_space=env.action_space,
                 device=device
@@ -156,22 +167,35 @@ def main(cfg: DictConfig):
 
     env = DummyVectorEnv([lambda: env])
 
+    collector = Collector(
+        policy=policies,
+        env=env,
+        buffer=buffer,
+        exploration_noise=False,
+    )
+
     start_time = time.time()
 
-     # train
+    step_per_collect = None # 100 * 5
+    step_per_epoch = 100 * 5
+    episode_per_collect= 5
+    epoch = 100 
+    batch_size = None # All collected data will be used
+    repeat_per_collect = 1 # Data will be used once
+
     result = OnpolicyTrainer(
         policy=policies,
         max_epoch=epoch,
-        batch_size=256,
+        batch_size=batch_size,
         train_collector=collector,
         test_collector=None,
         buffer=None,
         step_per_epoch=step_per_epoch,
-        repeat_per_collect=4,
+        repeat_per_collect=repeat_per_collect,
         episode_per_test=0,
         update_per_step=1.0,
         step_per_collect=step_per_collect,
-        episode_per_collect=None,
+        episode_per_collect=episode_per_collect,
         train_fn=None,
         test_fn=None,
         stop_fn=None,
@@ -191,13 +215,6 @@ def main(cfg: DictConfig):
     progress_df = pd.DataFrame(logger.progress_data)
     #progress_df.to_csv(os.path.join(args.path, "progress.csv"), index=False)
 
-    # eval
-    collector = Collector(
-        policy=policies,
-        env=env,
-        buffer=VectorReplayBuffer(20_000, len(env)), 
-        exploration_noise=False,
-    )
 
     collector = collector.collect(n_episode=1, render=0.1)
     eval_end_time = time.time()

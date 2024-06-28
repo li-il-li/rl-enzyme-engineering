@@ -137,7 +137,7 @@ class ProteinLigandInteractionEnv(AECEnv):
 
     def step(self, action):
         log.debug(f"Action space: {self._action_spaces['mutation_site_picker'].shape}")
-        log.debug(f"Executing action: {action}")
+        log.info(f"Executing action: {action}")
         log.debug("Step")
         
         if self.agent_selection == "mutation_site_picker":
