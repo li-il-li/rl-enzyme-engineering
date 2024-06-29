@@ -20,10 +20,7 @@ from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
 from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder
 
 
-#amino_acids = ['A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
-
 log = logging.getLogger(__name__)
-
 
 class ProteinLigandInteractionEnv(AECEnv):
 
@@ -131,16 +128,16 @@ class ProteinLigandInteractionEnv(AECEnv):
 
     def step(self, action):
         log.debug(f"Action space: {self._action_spaces['mutation_site_picker'].shape}")
-        log.info(f"Executing action: {action}")
+        log.debug(f"Executing action: {action}")
         log.debug("Step")
         
         if self.agent_selection == "mutation_site_picker":
-            log.info(f"Agent in execution: {self.agent_selection}")
+            log.debug(f"Agent in execution: {self.agent_selection}")
             self.mutation_site = action
             log.debug(f"Mutation site: {self.mutation_site}")
 
         elif self.agent_selection == "mutation_site_filler": 
-            log.info(f"Agent in execution: {self.agent_selection}")
+            log.debug(f"Agent in execution: {self.agent_selection}")
             self.mutant_aa_seq = self.decode_aa_sequence(action)
             log.debug(f"Action sequence: {self.mutant_aa_seq}")
             
@@ -169,13 +166,13 @@ class ProteinLigandInteractionEnv(AECEnv):
 
             self.timestep += 1
             
-            log.info(f"{self.agent_selection} finished.")
+            #log.info(f"{self.agent_selection} finished.")
 
         self.rewards = {
-            "mutation_site_picker": float(self.binding_affinity),
-            "mutation_site_filler": float(self.binding_affinity)
+            "mutation_site_picker": 1.0 - float(self.binding_affinity),
+            "mutation_site_filler": 1.0 - float(self.binding_affinity)
         }
-        log.info(f"Rewards set.")
+        #log.info(f"Rewards set.")
 
         # Check termination conditions
         # Check model properties (if folding prop is too low)
@@ -183,8 +180,8 @@ class ProteinLigandInteractionEnv(AECEnv):
         
         # Check truncation conditions (overwrites termination conditions)
         self.truncations = { "mutation_site_picker": False, "mutation_site_filler": False}
-        if self.timestep == 15: # Make configurable
-            self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
+        #if self.timestep == 15: # Make configurable
+        #    self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
@@ -197,12 +194,14 @@ class ProteinLigandInteractionEnv(AECEnv):
         # Adds .rewards to ._cumulative_rewards
         self._accumulate_rewards()
 
-        log.info(f"Observation: {self._get_obs()}")
-        log.info(f"Step finished.")
+        #log.info(f"Observation: {self._get_obs()}")
+        #log.info(f"Step finished.")
+        
+        self.render()
 
 
     def render(self):
-        log.info(f"Rendering...")
+        #log.info(f"Rendering...")
         if self.render_mode is None:
             log.warn(
                 "You are calling render method without specifying any render mode."
@@ -211,26 +210,16 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         if len(self.agents) == 2:
             
-            # Condition is because as part of the step we call .next and only then render() gets called
-            if self.agent_selection == "mutation_site_filler":
-                def replace_chars(string, char, interval):
-                    char_list = list(string)
-                    start, end = interval
-                    if start < 0 or end >= len(char_list) or start > end:
-                        log.error("Invalid interval")
-                        return string
-                    for i in range(start, end + 1):
-                        char_list[i] = char
-                    return ''.join(char_list)
+            if self.agent_selection == "mutation_site_picker":
+                string = self._mask_string(self.mutant_aa_seq,self.mutation_site)
 
-                sequence_edit = replace_chars(self.mutant_aa_seq, "_", self.mutation_site)
-                string = f"{sequence_edit}"
-
-            elif self.agent_selection == "mutation_site_picker":
+            elif self.agent_selection == "mutation_site_filler":
                 string = self.mutant_aa_seq
 
         else:
             string = "!!!!!!!!!!!!   Episode finished   !!!!!!!!!!!!"
+            
+        string = f"Step: {self.timestep}  |  Reward: {self.rewards[self.agent_selection]}  |  " + string
         log.info(string)
 
     def close(self):
@@ -248,7 +237,7 @@ class ProteinLigandInteractionEnv(AECEnv):
     @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
         return self._action_spaces[agent]
-
+    
     def _get_obs(self):
         
         return {
@@ -286,3 +275,10 @@ class ProteinLigandInteractionEnv(AECEnv):
         vocabulary = self.amino_acids_sequence_actions
         lookup_table_aa_to_int = {amino_acid: np.uint32(idx) for idx, amino_acid in enumerate(vocabulary)}
         return np.array([lookup_table_aa_to_int[aa] for aa in aa_sequence], dtype=np.uint32)
+    
+
+    def _mask_string(self, string, mask):
+        char_array = np.array(list(string))
+        char_array[mask == 1] = '_'
+        masked_string = ''.join(char_array)
+        return masked_string

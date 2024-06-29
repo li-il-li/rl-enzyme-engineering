@@ -17,6 +17,7 @@ import time
 import os
 import torch
 from torch import nn
+from torch.utils.tensorboard import SummaryWriter
 from torch.distributions import Categorical, Distribution, Independent, Bernoulli
 from torch.optim.lr_scheduler import LambdaLR
 from ProteinSequencePolicy.policy import ProteinSequencePolicy
@@ -27,6 +28,7 @@ from tianshou.policy import MultiAgentPolicyManager, RandomPolicy, PPOPolicy
 from tianshou.trainer import OnpolicyTrainer
 from tianshou.utils.net.common import ActorCritic, Net, MLP
 from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.utils import TensorboardLogger
 #from common import TrainLogger
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,7 @@ class CustomNet(nn.Module):
 
     def forward(self, obs, state=None, info=None):
         obs = obs.protein_ligand_conformation_latent
-        logger.info(f"Obs Preprocess Network: {obs.shape}")
+        #logger.info(f"Obs Preprocess Network: {obs.shape}")
         obs = torch.as_tensor(obs, device=self._device, dtype=torch.float32)
         logits = self.model(obs)
         return logits, state
@@ -61,6 +63,11 @@ class CustomNet(nn.Module):
 
 @hydra.main(version_base=None, config_path="../conf/", config_name='conf_dev')
 def main(cfg: DictConfig):
+    
+    log_path = os.path.join(os.getcwd(), 'rl-loop')
+    writer = SummaryWriter(log_path)
+    #writer.add_text("args", str(args))
+    tb_logger = TensorboardLogger(writer)
     
     device = cfg.experiment.device
 
@@ -87,9 +94,9 @@ def main(cfg: DictConfig):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    logger.info(f"Action Space shape: {action_shape}")
+    #logger.info(f"Action Space shape: {action_shape}")
     net = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[128]*4, device=device)
-    logger.info(f"Net: {net}")
+    #logger.info(f"Net: {net}")
     actor = Actor(preprocess_net=net, action_shape=action_shape, softmax_output=False, device=device)
     critic = Critic(net, device=device)
     
@@ -113,7 +120,7 @@ def main(cfg: DictConfig):
     def dist(logits: torch.Tensor) -> Distribution:
         # Create a Categorical distribution for each action
         #dist = Independent(Categorical(logits=logits), 1)
-        logger.info(f"Logits: {logits}")
+        #logger.info(f"Logits: {logits}")
         #dist = Independent(Categorical(logits=logits), 1)
         dist = Bernoulli(logits=logits)
         #logger.info(f"Action Dist: {dist.sample()}")
@@ -123,8 +130,8 @@ def main(cfg: DictConfig):
     #lr_scheduler = LambdaLR(optim, lr_lambda=lambda e: 1 - e / epoch)
     
     # PPO policy
-    logger.info(f"Observation Space: {env.observation_space['protein_ligand_conformation_latent']}")
-    logger.info(f"Action Space Picker: {env.action_space}")
+    #logger.info(f"Observation Space: {env.observation_space['protein_ligand_conformation_latent']}")
+    #logger.info(f"Action Space Picker: {env.action_space}")
     ppo_policy: PPOPolicy = PPOPolicy(
         actor=actor,
         critic=critic,
@@ -181,7 +188,7 @@ def main(cfg: DictConfig):
     start_time = time.time()
 
     step_per_collect = None # 100 * 5
-    step_per_epoch = 100 * 5
+    step_per_epoch = 100 # * 5
     episode_per_collect= 5
     epoch = 100 
     batch_size = None # All collected data will be used
@@ -207,7 +214,7 @@ def main(cfg: DictConfig):
         save_checkpoint_fn=None,
         resume_from_log=False,
         reward_metric=None,
-        logger=logger,
+        logger=tb_logger,
         verbose=True,
         show_progress=True,
         test_in_train=False,
@@ -216,7 +223,7 @@ def main(cfg: DictConfig):
     
     train_end_time = time.time()
 
-    progress_df = pd.DataFrame(logger.progress_data)
+    #progress_df = pd.DataFrame(logger.progress_data)
     #progress_df.to_csv(os.path.join(args.path, "progress.csv"), index=False)
 
 

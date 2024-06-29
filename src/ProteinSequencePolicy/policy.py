@@ -37,11 +37,11 @@ class ProteinSequencePolicy(BasePolicy):
 
         log.debug(f"Sample sequence...")
         mutant_sequence = batch.obs.mutation_aa_seq[0]
-        log.info(f"Mutant sequence: {mutant_sequence}")
-        log.info(f"Mutation Mask: {batch.obs.mutation_site[0]}")
+        #log.info(f"Mutant sequence: {mutant_sequence}")
+        #log.info(f"Mutation Mask: {batch.obs.mutation_site[0]}")
         mutation_mask = batch.obs.mutation_site[0]
         indices = np.where(mutation_mask == 1)[0]
-        log.info(f"Indices: {indices}")
+        #log.info(f"Indices: {indices}")
         
         _, entire_sequence  = inpaint(
             self.sequence_model,
