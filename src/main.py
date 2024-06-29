@@ -74,6 +74,7 @@ def main(cfg: DictConfig):
                                     ligand_smile=cfg.experiment.ligand_smile,
                                     device=device,
                                     config=cfg)
+    seq_encoder = env.encode_aa_sequence
     env = PettingZooEnv(env)
     
     # Model PPO
@@ -158,10 +159,9 @@ def main(cfg: DictConfig):
 
     policies = MultiAgentPolicyManager(
         [
-            #RandomPolicy(),
             ppo_policy,
             ProteinSequencePolicy(
-                sequence_encoder=env.encode_aa_sequence,
+                sequence_encoder=seq_encoder,
                 action_space=env.action_space,
                 device=device
             )

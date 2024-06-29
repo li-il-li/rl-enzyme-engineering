@@ -70,6 +70,7 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.agent_name_mapping = dict(
             zip(self.possible_agents, list(range(len(self.possible_agents))))
         )
+        self.mask = np.ones(len(self.wildtype_aa_seq)-1, dtype=bool)
         
         # Action space is the same for both agents (Tianshou limitation)
         self.amino_acids_sequence_actions = ['0', '1', 'A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
@@ -112,7 +113,7 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.truncations = {agent: False for agent in self.agents}
 
         self.mutant_aa_seq = self.wildtype_aa_seq
-        self.mutation_site = np.zeros(2,)
+        self.mutation_site = np.zeros(len(self.mutant_aa_seq))
         self.protein_ligand_conformation_latent = np.zeros((self.latent_vector_size), dtype=np.float32)
         self.binding_affinity = 0
 
@@ -125,11 +126,6 @@ class ProteinLigandInteractionEnv(AECEnv):
         return self.observations, self.infos
 
     def observe(self, agent):
-        """
-        Observe should return the observation of the specified agent. This function
-        should return a sane observation (though not necessarily the most up to date possible)
-        at any time after reset() is called.
-        """
         # observation of one agent is the previous state of the other
         return self.observations[agent]
 
@@ -141,12 +137,11 @@ class ProteinLigandInteractionEnv(AECEnv):
         if self.agent_selection == "mutation_site_picker":
             log.info(f"Agent in execution: {self.agent_selection}")
             self.mutation_site = action
-            log.info(f"Mutation site: {self.mutation_site}")
-            #aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
+            log.debug(f"Mutation site: {self.mutation_site}")
 
         elif self.agent_selection == "mutation_site_filler": 
             log.info(f"Agent in execution: {self.agent_selection}")
-            self.mutant_aa_seq = self.action_to_aa_sequence(action)
+            self.mutant_aa_seq = self.decode_aa_sequence(action)
             log.debug(f"Action sequence: {self.mutant_aa_seq}")
             
             # TODO add if else for structure or sequence based training
@@ -173,11 +168,14 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.protein_ligand_conformation_latent = self._get_ba_model_activation()
 
             self.timestep += 1
+            
+            log.info(f"{self.agent_selection} finished.")
 
         self.rewards = {
             "mutation_site_picker": float(self.binding_affinity),
             "mutation_site_filler": float(self.binding_affinity)
         }
+        log.info(f"Rewards set.")
 
         # Check termination conditions
         # Check model properties (if folding prop is too low)
@@ -194,13 +192,17 @@ class ProteinLigandInteractionEnv(AECEnv):
         if any(self.terminations.values()) or all(self.truncations.values()):
             self.agents = []
         
-         # selects the next agent.
+        # selects the next agent.
         self.agent_selection = self._agent_selector.next()
         # Adds .rewards to ._cumulative_rewards
         self._accumulate_rewards()
 
+        log.info(f"Observation: {self._get_obs()}")
+        log.info(f"Step finished.")
+
 
     def render(self):
+        log.info(f"Rendering...")
         if self.render_mode is None:
             log.warn(
                 "You are calling render method without specifying any render mode."
@@ -241,47 +243,28 @@ class ProteinLigandInteractionEnv(AECEnv):
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
-        log.info('Getting observations space')
         return self._observation_spaces[agent]
 
     @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
-        log.debug(f"Getting action space for agent {agent}.")
-        log.debug(f"Action space {self._action_spaces[agent]}.")
         return self._action_spaces[agent]
 
     def _get_obs(self):
         
-        mask = np.eye(len(self.wildtype_aa_seq)+2, dtype=bool)
-        mask[-2:, -2:] = False
-        #mask = np.ones(len(self.wildtype_aa_seq)+2, dtype=bool)
-        #mask[-2:] = False
-
-        mutation_site_picker_mask = ~mask
-        mutation_site_filler_mask = mask
-        
-        # HERE IF BACK TO OLD
-        #mask = np.eye(len(self.wildtype_aa_seq)-1, dtype=bool)
-        mask = np.ones(len(self.wildtype_aa_seq)-1, dtype=bool)
-        mutation_site_picker_mask = mask
-        mutation_site_filler_mask = mask
-        
-        log.debug(f"Mutation Mask Shape: {mutation_site_filler_mask.shape}")
-        log.debug(f"Mutation Mask: {mutation_site_filler_mask}")
         return {
             "mutation_site_picker": {
                 "agent_id": self.agents[0],
                 "mutation_aa_seq": self.mutant_aa_seq,
                 "mutation_site": self.mutation_site,
                 "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
-                "mask": mutation_site_picker_mask
+                "mask": self.mask
             },
             "mutation_site_filler": {
                 "agent_id": self.agents[1],
                 "mutation_aa_seq": self.mutant_aa_seq,
                 "mutation_site": self.mutation_site,
                 "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
-                "mask": mutation_site_filler_mask
+                "mask": self.mask
             }
         }
 
@@ -294,7 +277,7 @@ class ProteinLigandInteractionEnv(AECEnv):
     def _get_ba_model_activation(self):
         return self.get_ba_activations()
     
-    def action_to_aa_sequence(self,action):
+    def decode_aa_sequence(self,action):
         vocabulary = self.amino_acids_sequence_actions
         lookup_table_int_to_aa = {idx: amino_acid for idx, amino_acid in enumerate(vocabulary)}
         return ''.join(lookup_table_int_to_aa[act] for act in action)

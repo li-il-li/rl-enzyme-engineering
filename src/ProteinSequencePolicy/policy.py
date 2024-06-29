@@ -2,7 +2,7 @@ from tianshou.policy import BasePolicy
 from tianshou.data import Batch
 from evodiff.pretrained import OA_DM_38M, OA_DM_640M
 #from evodiff.conditional_generation import inpaint_simple
-from evodiff_inference import inpaint
+from .evodiff_inference import inpaint
 import numpy as np
 import logging
 import ProteinSequencePolicy.fsa as fsa
@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 class ProteinSequencePolicy(BasePolicy):
     def __init__(
             self,
+            sequence_encoder,
             action_space: gym.Space,
             device,
         ):
@@ -24,6 +25,7 @@ class ProteinSequencePolicy(BasePolicy):
         log.debug("Loading sequence model...")
         self.device = device
         self.sequence_model, self.sequenze_tokenizer = self._init_evodiff(device)
+        self.sequence_enocder = sequence_encoder
 
     def forward(self, batch, state=None, model=None):
         """Compute action over the given batch data."""
@@ -51,7 +53,7 @@ class ProteinSequencePolicy(BasePolicy):
 
         log.debug(f"Mutation: {entire_sequence}")
         
-        encoded_sequence = fsa.aa_sequence_to_action(entire_sequence)
+        encoded_sequence = self.sequence_enocder(entire_sequence)
         
         action_space = self.action_space
         mask = batch.obs.mask[0]
