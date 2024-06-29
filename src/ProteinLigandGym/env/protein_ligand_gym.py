@@ -20,7 +20,7 @@ from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
 from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder
 
 
-amino_acids = ['A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+#amino_acids = ['A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
 
 log = logging.getLogger(__name__)
 
@@ -72,11 +72,9 @@ class ProteinLigandInteractionEnv(AECEnv):
         )
         
         # Action space is the same for both agents (Tianshou limitation)
-        action_space = spaces.Box(
-            low=np.array([0] * (len(self.wildtype_aa_seq) + 2)),
-            high=np.array([len(amino_acids)-1] * len(self.wildtype_aa_seq) + [len(self.wildtype_aa_seq) - 1] * 2),
-            dtype=np.int32
-        )
+        self.amino_acids_sequence_actions = ['0', '1', 'A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+        action_space = spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq)))
+
         self._action_spaces = {
             "mutation_site_picker": action_space,
             "mutation_site_filler": action_space
@@ -87,14 +85,14 @@ class ProteinLigandInteractionEnv(AECEnv):
             "mutation_site_picker": spaces.Dict(
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
-                    "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq)-1,shape = (2,),dtype=np.uint32),
+                    "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
                     "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32)
                 }
             ),
             "mutation_site_filler": spaces.Dict(
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
-                    "mutation_site": spaces.Box(low = 0,high = len(self.wildtype_aa_seq)-1,shape = (2,),dtype=np.uint32),
+                    "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
                     "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32)
                 }
             )
@@ -141,14 +139,13 @@ class ProteinLigandInteractionEnv(AECEnv):
         log.debug("Step")
         
         if self.agent_selection == "mutation_site_picker":
-            log.debug(f"Agent in execution: {self.agent_selection}")
-            action = action[-2:]
-            self.mutation_site = np.sort(action)
-            log.debug(f"Mutation site: {self.mutation_site}")
+            log.info(f"Agent in execution: {self.agent_selection}")
+            self.mutation_site = action
+            log.info(f"Mutation site: {self.mutation_site}")
             #aa_seq_hole_start_idx, aa_seq_hole_end_idx = np.sort(action)
 
         elif self.agent_selection == "mutation_site_filler": 
-            log.debug(f"Agent in execution: {self.agent_selection}")
+            log.info(f"Agent in execution: {self.agent_selection}")
             self.mutant_aa_seq = self.action_to_aa_sequence(action)
             log.debug(f"Action sequence: {self.mutant_aa_seq}")
             
@@ -263,6 +260,12 @@ class ProteinLigandInteractionEnv(AECEnv):
         mutation_site_picker_mask = ~mask
         mutation_site_filler_mask = mask
         
+        # HERE IF BACK TO OLD
+        #mask = np.eye(len(self.wildtype_aa_seq)-1, dtype=bool)
+        mask = np.ones(len(self.wildtype_aa_seq)-1, dtype=bool)
+        mutation_site_picker_mask = mask
+        mutation_site_filler_mask = mask
+        
         log.debug(f"Mutation Mask Shape: {mutation_site_filler_mask.shape}")
         log.debug(f"Mutation Mask: {mutation_site_filler_mask}")
         return {
@@ -292,9 +295,11 @@ class ProteinLigandInteractionEnv(AECEnv):
         return self.get_ba_activations()
     
     def action_to_aa_sequence(self,action):
-        lookup_table_int_to_aa = {idx: amino_acid for idx, amino_acid in enumerate(amino_acids)}
+        vocabulary = self.amino_acids_sequence_actions
+        lookup_table_int_to_aa = {idx: amino_acid for idx, amino_acid in enumerate(vocabulary)}
         return ''.join(lookup_table_int_to_aa[act] for act in action)
 
-    def aa_sequence_to_action(self,aa_sequence):
-        lookup_table_aa_to_int = {amino_acid: np.uint32(idx) for idx, amino_acid in enumerate(amino_acids)}
+    def encode_aa_sequence(self,aa_sequence):
+        vocabulary = self.amino_acids_sequence_actions
+        lookup_table_aa_to_int = {amino_acid: np.uint32(idx) for idx, amino_acid in enumerate(vocabulary)}
         return np.array([lookup_table_aa_to_int[aa] for aa in aa_sequence], dtype=np.uint32)

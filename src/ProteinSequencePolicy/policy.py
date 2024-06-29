@@ -1,7 +1,8 @@
 from tianshou.policy import BasePolicy
 from tianshou.data import Batch
 from evodiff.pretrained import OA_DM_38M, OA_DM_640M
-from evodiff.conditional_generation import inpaint_simple
+#from evodiff.conditional_generation import inpaint_simple
+from evodiff_inference import inpaint
 import numpy as np
 import logging
 import ProteinSequencePolicy.fsa as fsa
@@ -34,15 +35,16 @@ class ProteinSequencePolicy(BasePolicy):
 
         log.debug(f"Sample sequence...")
         mutant_sequence = batch.obs.mutation_aa_seq[0]
-        mutation_site_start_idx, mutation_site_end_idx = batch.obs.mutation_site[0].astype(int)
+        log.info(f"Mutant sequence: {mutant_sequence}")
+        log.info(f"Mutation Mask: {batch.obs.mutation_site[0]}")
+        mutation_mask = batch.obs.mutation_site[0]
+        indices = np.where(mutation_mask == 1)[0]
+        log.info(f"Indices: {indices}")
         
-        log.debug(f"Mutant sequence: {mutant_sequence}")
-        log.debug(f"Mutation Sites Batch Ops: {mutation_site_start_idx, mutation_site_end_idx}")
-        
-        sample, entire_sequence, generated_idr = inpaint_simple(
+        _, entire_sequence  = inpaint(
             self.sequence_model,
             mutant_sequence,
-            mutation_site_start_idx, mutation_site_end_idx,
+            indices,
             tokenizer=self.sequenze_tokenizer,
             device=self.device
         )

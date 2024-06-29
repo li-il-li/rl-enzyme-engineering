@@ -17,7 +17,7 @@ import time
 import os
 import torch
 from torch import nn
-from torch.distributions import Categorical, Distribution, Independent
+from torch.distributions import Categorical, Distribution, Independent, Bernoulli
 from torch.optim.lr_scheduler import LambdaLR
 from ProteinSequencePolicy.policy import ProteinSequencePolicy
 from ProteinLigandGym import protein_ligand_gym_v0
@@ -89,7 +89,7 @@ def main(cfg: DictConfig):
     logger.info(f"Action Space shape: {action_shape}")
     net = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[128]*4, device=device)
     logger.info(f"Net: {net}")
-    actor = Actor(preprocess_net=net, action_shape=action_shape, softmax_output=False,device=device)
+    actor = Actor(preprocess_net=net, action_shape=action_shape, softmax_output=False, device=device)
     critic = Critic(net, device=device)
     
     def actor_init(layer):
@@ -110,9 +110,12 @@ def main(cfg: DictConfig):
     )
 
     def dist(logits: torch.Tensor) -> Distribution:
+        # Create a Categorical distribution for each action
+        #dist = Independent(Categorical(logits=logits), 1)
         logger.info(f"Logits: {logits}")
-        dist = Independent(Categorical(logits=logits), 1)
-        logger.info(f"Action Dist: {dist.sample()}")
+        #dist = Independent(Categorical(logits=logits), 1)
+        dist = Bernoulli(logits=logits)
+        #logger.info(f"Action Dist: {dist.sample()}")
         return dist
     
     # decay learning rate to 0 linearly
@@ -149,7 +152,7 @@ def main(cfg: DictConfig):
         total_size=10000,
         buffer_num=1,
         ignore_obs_next=True,
-        save_only_last_obs=True,
+        save_only_last_obs=False,
         stack_num=1,
     )
 
@@ -158,6 +161,7 @@ def main(cfg: DictConfig):
             #RandomPolicy(),
             ppo_policy,
             ProteinSequencePolicy(
+                sequence_encoder=env.encode_aa_sequence,
                 action_space=env.action_space,
                 device=device
             )
