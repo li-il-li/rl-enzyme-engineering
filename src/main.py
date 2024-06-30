@@ -29,10 +29,8 @@ from tianshou.trainer import OnpolicyTrainer
 from tianshou.utils.net.common import ActorCritic, Net, MLP
 from tianshou.utils.net.discrete import Actor, Critic
 from tianshou.utils import TensorboardLogger
-#from common import TrainLogger
 
 logger = logging.getLogger(__name__)
-
 
 class CustomNet(nn.Module):
     def __init__(self, state_shape, action_shape, hidden_sizes, device):
@@ -68,7 +66,7 @@ def main(cfg: DictConfig):
     log_path = os.path.join(os.getcwd(), 'rl-loop')
     writer = SummaryWriter(log_path)
     #writer.add_text("args", str(args))
-    tb_logger = TensorboardLogger(writer)
+    tb_logger = TensorboardLogger(writer, train_interval=10)
     
     device = cfg.experiment.device
 
