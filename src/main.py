@@ -83,11 +83,14 @@ def main(cfg: DictConfig):
     
     tb_logger.write("config", 0, {"seed": seed})
 
-    env = protein_ligand_gym_v0.env(render_mode="human",
-                                    wildtype_aa_seq=cfg.experiment.wildtype_AA_seq,
-                                    ligand_smile=cfg.experiment.ligand_smile,
-                                    device=device,
-                                    config=cfg)
+    env = protein_ligand_gym_v0.env(
+        render_mode="human",
+        wildtype_aa_seq=cfg.experiment.wildtype_AA_seq,
+        ligand_smile=cfg.experiment.ligand_smile,
+        max_steps=cfg.agents.steps_per_epoch,
+        device=device,
+        config=cfg
+    )
     seq_encoder = env.encode_aa_sequence
     env = PettingZooEnv(env)
     
@@ -143,17 +146,17 @@ def main(cfg: DictConfig):
         optim=optim,
         dist_fn=dist,
         action_space=env.action_space,
-        eps_clip=0.2,
+        eps_clip=cfg.agents.ppo.eps,
         dual_clip=None,
-        value_clip=True,
-        advantage_normalization=True,
-        recompute_advantage=False,
-        vf_coef=0.5,
-        ent_coef=0.01,
-        max_grad_norm=0.5,
-        gae_lambda=0.95,
-        discount_factor=0.99,
-        reward_normalization=True, # 5.1 Value Normalization
+        value_clip=cfg.agents.ppo.value_clip,
+        advantage_normalization=cfg.agents.ppo.advantage_normalization,
+        recompute_advantage=cfg.agents.ppo.recompute_advantage,
+        vf_coef=cfg.agents.ppo.vf_coef,
+        ent_coef=cfg.agents.ppo.ent_coef,
+        max_grad_norm=cfg.agents.ppo.max_grad_norm,
+        gae_lambda=cfg.agents.ppo.gae_lambda,
+        discount_factor=cfg.agents.ppo.discount_factor,
+        reward_normalization=cfg.agents.ppo.reward_normalization, # 5.1 Value Normalization
         deterministic_eval=False,
         observation_space=env.observation_space['protein_ligand_conformation_latent'],
         action_scaling=False,
@@ -162,7 +165,7 @@ def main(cfg: DictConfig):
     ).to(device)
     
     buffer = VectorReplayBuffer(
-        total_size=10000,
+        total_size=cfg.agents.replayBuffer.total_size,
         buffer_num=1,
         ignore_obs_next=True,
         save_only_last_obs=False,
@@ -191,14 +194,6 @@ def main(cfg: DictConfig):
         exploration_noise=False,
     )
 
-    step_per_collect = None # 100 * 5
-    step_per_epoch = 10 # * 5
-    episode_per_collect = 2
-    epoch = 100 
-    batch_size = 10
-    #batch_size = None # All collected data will be used
-    repeat_per_collect = 1 # Data will be used once
-    
     #def train_fn(epoch, env_step):
     #    policy.policies[agents[args.agent_id - 1]].set_eps(args.eps_train)
 
@@ -221,17 +216,17 @@ def main(cfg: DictConfig):
 
     result = OnpolicyTrainer(
         policy=policy,
-        max_epoch=epoch,
-        batch_size=batch_size,
+        max_epoch=cfg.agents.epochs,
+        batch_size=cfg.agents.batch_size,
         train_collector=collector,
         test_collector=None,
         buffer=None,
-        step_per_epoch=step_per_epoch,
-        repeat_per_collect=repeat_per_collect,
+        step_per_epoch=cfg.agents.steps_per_epoch,
+        repeat_per_collect=cfg.agents.repeat_per_collect,
         episode_per_test=0,
         update_per_step=1.0,
-        step_per_collect=step_per_collect,
-        episode_per_collect=episode_per_collect,
+        step_per_collect=None,
+        episode_per_collect=cfg.agents.episode_per_collect,
         train_fn=None,
         test_fn=None,
         stop_fn=None,
@@ -247,7 +242,8 @@ def main(cfg: DictConfig):
     ).run()
     
     # This does not get executed afaik
-    collector = collector.collect(n_episode=1, render=0.1)
+    #collector = collector.collect(n_episode=1, render=0.1)
+
     #args.eval_mean_reward = result.returns_stat.mean
     #args.training_time_h = ((train_end_time - start_time) / 60) / 60
     #args.total_time_h = ((eval_end_time - start_time) / 60) / 60

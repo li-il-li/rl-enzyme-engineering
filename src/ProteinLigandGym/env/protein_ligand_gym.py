@@ -30,11 +30,14 @@ class ProteinLigandInteractionEnv(AECEnv):
         "render_modes": ["human"]
     }
 
-    def __init__(self, render_mode=None,
-                 wildtype_aa_seq: str = 'AA',
-                 ligand_smile: str = 'SMILE',
-                 device = 'cuda',
-                 config={}):
+    def __init__(
+        self, render_mode=None,
+        wildtype_aa_seq: str = 'AA',
+        ligand_smile: str = 'SMILE',
+        max_steps = 100,
+        device = 'cuda',
+        config = {}
+    ):
         log.debug("Initializing environment...")
         
         # Hydra Config
@@ -64,6 +67,7 @@ class ProteinLigandInteractionEnv(AECEnv):
         
         # PettingZoo Env
         self.timestep = None
+        self.max_steps = max_steps
         self.possible_agents = ["mutation_site_picker", "mutation_site_filler"]
         self.agent_name_mapping = dict(
             zip(self.possible_agents, list(range(len(self.possible_agents))))
@@ -175,10 +179,14 @@ class ProteinLigandInteractionEnv(AECEnv):
 
             # Check truncation conditions (overwrites termination conditions)
             self.truncations = { "mutation_site_picker": False, "mutation_site_filler": False}
-            if self.timestep == NUM_ITERS:
-                self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
 
             self.timestep += 1
+
+            if self.timestep == self.max_steps:
+                self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
+
+            self.render()
+
 
 
         # Check termination conditions
@@ -187,9 +195,6 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
-        
-        
-        self.render()
 
         if any(self.terminations.values()) or all(self.truncations.values()):
             self.agents = []
@@ -207,16 +212,13 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         if len(self.agents) == 2:
             
-            if self.agent_selection == "mutation_site_picker":
-                string = self._mask_string(self.mutant_aa_seq,self.mutation_site)
-
-            elif self.agent_selection == "mutation_site_filler":
-                string = self.mutant_aa_seq
+            mask = self._mask_string(self.mutant_aa_seq,self.mutation_site)
+            sequence = self.mutant_aa_seq
+            string = f"Step: {self.timestep}  |  Reward: {self.rewards[self.agent_selection]}" + "\n" + mask + "\n" + sequence 
 
         else:
             string = "!!!!!!!!!!!!   Episode finished   !!!!!!!!!!!!"
             
-        string = f"Step: {self.timestep}  |  Reward: {self.rewards[self.agent_selection]}  |  " + string
         log.info(string)
 
     def close(self):

@@ -4,6 +4,7 @@ from supersuit import pad_action_space_v0
 def env(render_mode=None,
         wildtype_aa_seq: str = 'AA',
         ligand_smile: str = 'SMILE',
+        max_steps = 100,
         device = 'cuda',
         config={}):
     """
@@ -12,6 +13,6 @@ def env(render_mode=None,
     elsewhere in the developer documentation.
     """
     
-    env = ProteinLigandInteractionEnv(render_mode, wildtype_aa_seq, ligand_smile, device, config)
+    env = ProteinLigandInteractionEnv(render_mode, wildtype_aa_seq, ligand_smile, max_steps, device, config)
 
     return env
