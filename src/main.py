@@ -6,6 +6,8 @@ sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/m
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env")
 
+import random
+import pickle
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import hydra
@@ -63,9 +65,9 @@ class CustomNet(nn.Module):
 @hydra.main(version_base=None, config_path="../conf/", config_name='conf_dev')
 def main(cfg: DictConfig):
     
+    # Logger
     log_path = os.path.join(os.getcwd(), 'rl-loop')
     writer = SummaryWriter(log_path)
-    #writer.add_text("args", str(args))
     tb_logger = TensorboardLogger(writer, train_interval=10)
     
     device = cfg.experiment.device
@@ -74,7 +76,13 @@ def main(cfg: DictConfig):
 
     logger.debug("Loading PettingZoo environment...")
 
-    # TODO add seed:
+    # Set Seed
+    seed = random.randint(0, 2**32 - 1)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    
+    tb_logger.write("config", 0, {"seed": seed})
+
     env = protein_ligand_gym_v0.env(render_mode="human",
                                     wildtype_aa_seq=cfg.experiment.wildtype_AA_seq,
                                     ligand_smile=cfg.experiment.ligand_smile,
@@ -86,12 +94,6 @@ def main(cfg: DictConfig):
     # Model PPO
     state_shape = env.observation_space['protein_ligand_conformation_latent'].shape
     action_shape = env.action_space.shape
-
-    # seed
-    # TODO make seed cfg.seed
-    seed = 1
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
     #logger.info(f"Action Space shape: {action_shape}")
     net = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[128]*4, device=device)
@@ -113,17 +115,21 @@ def main(cfg: DictConfig):
     critic.last.apply(critic_init)
 
     optim = torch.optim.Adam(
-        ActorCritic(actor, critic).parameters(), lr=2.5e-4, eps=1e-5
+        ActorCritic(actor, critic).parameters(), lr=cfg.agents.adam.learning_rate, eps=cfg.agents.adam.epsilon
     )
 
     def dist(logits: torch.Tensor) -> Distribution:
-        # Create a Categorical distribution for each action
-        #dist = Independent(Categorical(logits=logits), 1)
-        #logger.info(f"Logits: {logits}")
-        #dist = Independent(Categorical(logits=logits), 1)
-        dist = Bernoulli(logits=logits)
-        #logger.info(f"Action Dist: {dist.sample()}")
-        return dist
+        target_ratio = cfg.agents.sequence_edit_target_ratio
+        # Convert logits to probabilities
+        probs = torch.sigmoid(logits)
+        # Calculate current mean probability
+        current_ratio = probs.mean()
+        # Adjust probabilities to meet target ratio
+        adjusted_probs = probs * (target_ratio / current_ratio)
+        # Clip probabilities to valid range [0, 1]
+        adjusted_probs = torch.clamp(adjusted_probs, 0, 1)
+
+        return Bernoulli(probs=adjusted_probs)
     
     # decay learning rate to 0 linearly
     #lr_scheduler = LambdaLR(optim, lr_lambda=lambda e: 1 - e / epoch)
@@ -167,6 +173,7 @@ def main(cfg: DictConfig):
         [
             ppo_policy,
             ProteinSequencePolicy(
+                model_size_parameters = cfg.evodiff.model_size_parameters,
                 sequence_encoder=seq_encoder,
                 action_space=env.action_space,
                 device=device
@@ -184,8 +191,6 @@ def main(cfg: DictConfig):
         exploration_noise=False,
     )
 
-    start_time = time.time()
-
     step_per_collect = None # 100 * 5
     step_per_epoch = 10 # * 5
     episode_per_collect = 2
@@ -196,6 +201,23 @@ def main(cfg: DictConfig):
     
     #def train_fn(epoch, env_step):
     #    policy.policies[agents[args.agent_id - 1]].set_eps(args.eps_train)
+
+    def save_checkpoint_fn(epoch: int, env_step: int, gradient_step: int) -> str:
+        # Saves after every epoch
+        logger.info("Saving models and buffer.")
+        ckpt_path = os.path.join(log_path, "checkpoint.pth")
+        torch.save(
+            {
+                "model": policy.state_dict(),
+                "optim": optim.state_dict(),
+            },
+            ckpt_path,
+        )
+        # TODO Renable
+        #buffer_path = os.path.join(log_path, "train_buffer.pkl")
+        #with open(buffer_path, "wb") as f:
+        #    pickle.dump(collector.buffer, f)
+        return ckpt_path
 
     result = OnpolicyTrainer(
         policy=policy,
@@ -214,7 +236,7 @@ def main(cfg: DictConfig):
         test_fn=None,
         stop_fn=None,
         save_best_fn=None,
-        save_checkpoint_fn=None,
+        save_checkpoint_fn=save_checkpoint_fn,
         resume_from_log=False,
         reward_metric=None,
         logger=tb_logger,
@@ -224,14 +246,8 @@ def main(cfg: DictConfig):
         save_fn=None,
     ).run()
     
-    train_end_time = time.time()
-
-    #progress_df = pd.DataFrame(logger.progress_data)
-    #progress_df.to_csv(os.path.join(args.path, "progress.csv"), index=False)
-
-
+    # This does not get executed afaik
     collector = collector.collect(n_episode=1, render=0.1)
-    eval_end_time = time.time()
     #args.eval_mean_reward = result.returns_stat.mean
     #args.training_time_h = ((train_end_time - start_time) / 60) / 60
     #args.total_time_h = ((eval_end_time - start_time) / 60) / 60

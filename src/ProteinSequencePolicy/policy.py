@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 class ProteinSequencePolicy(BasePolicy):
     def __init__(
             self,
+            model_size_parameters,
             sequence_encoder,
             action_space: gym.Space,
             device,
@@ -25,7 +26,7 @@ class ProteinSequencePolicy(BasePolicy):
 
         log.debug("Loading sequence model...")
         self.device = device
-        self.sequence_model, self.sequenze_tokenizer = self._init_evodiff(device)
+        self.sequence_model, self.sequenze_tokenizer = self._init_evodiff(device, model_size_parameters)
         self.sequence_enocder = sequence_encoder
 
     def forward(self, batch, state=None, model=None):
@@ -74,9 +75,9 @@ class ProteinSequencePolicy(BasePolicy):
             "loss": 1.0
         }
     
-    def _init_evodiff(self, device):
+    def _init_evodiff(self, device, model_size):
         # TODO change back to big model
-        model, collater, tokenizer, scheme = OA_DM_640M() # OA_DM_38M() 
+        model, collater, tokenizer, scheme = OA_DM_640M() if model_size == 640 else OA_DM_38M()
         model.to(device)
 
         return model, tokenizer

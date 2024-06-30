@@ -235,6 +235,7 @@ class ProteinLigandInteractionEnv(AECEnv):
     def action_space(self, agent):
         return self._action_spaces[agent]
     
+    
     def _get_obs(self):
         
         return {

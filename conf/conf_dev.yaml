@@ -3,9 +3,13 @@ experiment:
   ligand_smile: "OC(=O)CCc1ccccc1"
   # subSmiles = ['CC(=O)CCc1ccccc1', 'OC(=O)CCc1ccccc1', 'COc1cccc(CCC(O)=O)c1', 'COc1cc(CCCO)ccc1O', 'COc1cc(CCC(O)=O)ccc1O', 'OC(=O)CCc1ccc2OCOc2c1', 'COc1cc(CCCO)cc(OC)c1O', 'OC(=O)Cc1ccccc1', 'CC(=O)CCc1ccc2OCOc2c1']
   device: "cuda"
-  directory: ${hydra.run.dir}
+agents:
+  sequence_edit_target_ratio: 0.1
+  adam:
+    learning_rate: 2.5e-4
+    epsilon: 1e-5
 evodiff:
-  ckpt: "fasdf"
+  model_size_parameters: 640
   mutations: 5
 alphaflow:
   ckpt: "/root/projects/rl-enzyme-engineering/ckpts/AlphaFlow/esmflow_md_distilled_202402.pt"
