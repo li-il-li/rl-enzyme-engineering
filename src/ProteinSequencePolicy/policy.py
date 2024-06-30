@@ -1,4 +1,4 @@
-from tianshou.policy import BasePolicy
+from tianshou.policy.base import BasePolicy, TrainingStats
 from tianshou.data import Batch
 from evodiff.pretrained import OA_DM_38M, OA_DM_640M
 #from evodiff.conditional_generation import inpaint_simple
@@ -7,10 +7,18 @@ import numpy as np
 import logging
 import ProteinSequencePolicy.fsa as fsa
 import gymnasium as gym
+from dataclasses import dataclass
+from typing import TypeVar, Generic
 
 log = logging.getLogger(__name__)
 
-class ProteinSequencePolicy(BasePolicy):
+@dataclass(kw_only=True)
+class ProtSeqTrainingStats(TrainingStats):
+    loss: float
+
+TProtSeqTrainingStats = TypeVar("TProtSeqTrainingStats", bound=ProtSeqTrainingStats)
+
+class ProteinSequencePolicy(BasePolicy[TProtSeqTrainingStats], Generic[TProtSeqTrainingStats]):
     def __init__(
             self,
             sequence_encoder,
@@ -68,7 +76,8 @@ class ProteinSequencePolicy(BasePolicy):
 
     def learn(self, batch, **kwargs):
         """This is a random policy, so no learning is involved."""
-        pass
+        #log.info(f"Training ProteinSequencePolicy: {batch}")
+        return ProtSeqTrainingStats(loss=1.0) 
     
     def _init_evodiff(self, device):
         # TODO change back to big model

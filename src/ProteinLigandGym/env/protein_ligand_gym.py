@@ -19,6 +19,7 @@ from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
 # BIND
 from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder
 
+NUM_ITERS = 10
 
 log = logging.getLogger(__name__)
 
@@ -164,40 +165,36 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.binding_affinity = score[0]['non_binder_prob']
             self.protein_ligand_conformation_latent = self._get_ba_model_activation()
 
-            self.timestep += 1
-            
-            #log.info(f"{self.agent_selection} finished.")
+            self.rewards = {
+                "mutation_site_picker": 1.0 - float(self.binding_affinity),
+                "mutation_site_filler": 1.0 - float(self.binding_affinity)
+            }
 
-        self.rewards = {
-            "mutation_site_picker": 1.0 - float(self.binding_affinity),
-            "mutation_site_filler": 1.0 - float(self.binding_affinity)
-        }
-        #log.info(f"Rewards set.")
+            # Adds .rewards to ._cumulative_rewards
+            self._accumulate_rewards()
+
+            # Check truncation conditions (overwrites termination conditions)
+            self.truncations = { "mutation_site_picker": False, "mutation_site_filler": False}
+            if self.timestep == NUM_ITERS:
+                self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
+
+            self.timestep += 1
+
 
         # Check termination conditions
         # Check model properties (if folding prop is too low)
         self.terminations = { "mutation_site_picker": False, "mutation_site_filler": False}
-        
-        # Check truncation conditions (overwrites termination conditions)
-        self.truncations = { "mutation_site_picker": False, "mutation_site_filler": False}
-        #if self.timestep == 15: # Make configurable
-        #    self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
         
-        if any(self.terminations.values()) or all(self.truncations.values()):
-            self.agents = []
-        
-        # selects the next agent.
-        self.agent_selection = self._agent_selector.next()
-        # Adds .rewards to ._cumulative_rewards
-        self._accumulate_rewards()
-
-        #log.info(f"Observation: {self._get_obs()}")
-        #log.info(f"Step finished.")
         
         self.render()
+
+        if any(self.terminations.values()) or all(self.truncations.values()):
+            self.agents = []
+
+        self.agent_selection = self._agent_selector.next()
 
 
     def render(self):

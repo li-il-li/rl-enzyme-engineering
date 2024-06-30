@@ -33,6 +33,7 @@ from tianshou.utils import TensorboardLogger
 
 logger = logging.getLogger(__name__)
 
+
 class CustomNet(nn.Module):
     def __init__(self, state_shape, action_shape, hidden_sizes, device):
         super().__init__()
@@ -164,7 +165,7 @@ def main(cfg: DictConfig):
         stack_num=1,
     )
 
-    policies = MultiAgentPolicyManager(
+    policy = MultiAgentPolicyManager(
         [
             ppo_policy,
             ProteinSequencePolicy(
@@ -179,7 +180,7 @@ def main(cfg: DictConfig):
     env = DummyVectorEnv([lambda: env])
 
     collector = Collector(
-        policy=policies,
+        policy=policy,
         env=env,
         buffer=buffer,
         exploration_noise=False,
@@ -188,14 +189,18 @@ def main(cfg: DictConfig):
     start_time = time.time()
 
     step_per_collect = None # 100 * 5
-    step_per_epoch = 100 # * 5
-    episode_per_collect= 5
+    step_per_epoch = 10 # * 5
+    episode_per_collect = 2
     epoch = 100 
-    batch_size = None # All collected data will be used
+    batch_size = 10
+    #batch_size = None # All collected data will be used
     repeat_per_collect = 1 # Data will be used once
+    
+    #def train_fn(epoch, env_step):
+    #    policy.policies[agents[args.agent_id - 1]].set_eps(args.eps_train)
 
     result = OnpolicyTrainer(
-        policy=policies,
+        policy=policy,
         max_epoch=epoch,
         batch_size=batch_size,
         train_collector=collector,
