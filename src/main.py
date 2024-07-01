@@ -31,8 +31,21 @@ from tianshou.trainer import OnpolicyTrainer
 from tianshou.utils.net.common import ActorCritic, Net, MLP
 from tianshou.utils.net.discrete import Actor, Critic
 from tianshou.utils import TensorboardLogger
+from tianshou.utils.logger.base import LOG_DATA_TYPE, BaseLogger
 
 logger = logging.getLogger(__name__)
+
+#class CustomTensorboardLogger(TensorboardLogger):
+#    def __init__(self, *args, **kwargs):
+#        super().__init__(*args, **kwargs)
+#    
+#    def write(self, step_type: str, step: int, data: LOG_DATA_TYPE) -> None:
+#        logger.info(f"Write Tensorboard: {data}")
+#        for k, v in data.items():
+#            self.writer.add_scalar(k, v, global_step=step)
+#        if self.write_flush:  # issue 580
+#            self.writer.flush()  # issue #482
+
 
 class CustomNet(nn.Module):
     def __init__(self, state_shape, action_shape, hidden_sizes, device):
@@ -68,7 +81,8 @@ def main(cfg: DictConfig):
     # Logger
     log_path = os.path.join(os.getcwd(), 'rl-loop')
     writer = SummaryWriter(log_path)
-    tb_logger = TensorboardLogger(writer, train_interval=10)
+    tb_logger = TensorboardLogger(writer, train_interval=10,update_interval=1)
+    #tb_logger = CustomTensorboardLogger(writer, train_interval=10)
     
     device = cfg.experiment.device
 
@@ -213,6 +227,13 @@ def main(cfg: DictConfig):
         #with open(buffer_path, "wb") as f:
         #    pickle.dump(collector.buffer, f)
         return ckpt_path
+    
+    def train_fn(epoch: int, env_step: int) -> None:
+        logger.info("running test")
+        actor_loss = policy.policies
+        logger.info(actor_loss)
+        logger.info(env_step)
+        #tb_logger.write("loss/actor", env_step, actor_loss)
 
     result = OnpolicyTrainer(
         policy=policy,
@@ -237,7 +258,7 @@ def main(cfg: DictConfig):
         logger=tb_logger,
         verbose=True,
         show_progress=True,
-        test_in_train=False,
+        test_in_train=True,
         save_fn=None,
     ).run()
     

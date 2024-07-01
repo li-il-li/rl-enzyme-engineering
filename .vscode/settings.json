@@ -1,5 +1,6 @@
 {
     "terminal.integrated.env.linux": {
         "RCLONE_CONFIG": "/workspaces/rl-enzyme-engineering/rclone.conf"
-    }
+    },
+    "tensorBoard.logDirectory": "/root/projects/rl-enzyme-engineering/experiments"
 }
