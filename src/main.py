@@ -113,10 +113,11 @@ def main(cfg: DictConfig):
     action_shape = env.action_space.shape
 
     #logger.info(f"Action Space shape: {action_shape}")
-    net = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[128]*4, device=device)
+    net_actor = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256]*4, device=device)
     #logger.info(f"Net: {net}")
-    actor = Actor(preprocess_net=net, action_shape=action_shape, softmax_output=False, device=device)
-    critic = Critic(net, device=device)
+    actor = Actor(preprocess_net=net_actor, action_shape=action_shape, softmax_output=False, device=device)
+    net_critic = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256]*4, device=device)
+    critic = Critic(net_critic, device=device)
     
     def actor_init(layer):
         if isinstance(layer, nn.Linear):
@@ -147,9 +148,6 @@ def main(cfg: DictConfig):
         adjusted_probs = torch.clamp(adjusted_probs, 0, 1)
 
         return Bernoulli(probs=adjusted_probs)
-    
-    # decay learning rate to 0 linearly
-    #lr_scheduler = LambdaLR(optim, lr_lambda=lambda e: 1 - e / epoch)
     
     # PPO policy
     #logger.info(f"Observation Space: {env.observation_space['protein_ligand_conformation_latent']}")
