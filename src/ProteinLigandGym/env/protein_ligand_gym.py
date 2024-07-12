@@ -89,14 +89,16 @@ class ProteinLigandInteractionEnv(AECEnv):
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
-                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32)
+                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32),
+                    "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32)
                 }
             ),
             "mutation_site_filler": spaces.Dict(
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
-                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32)
+                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32),
+                    "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32)
                 }
             )
         }
@@ -117,6 +119,7 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.mutant_aa_seq = self.wildtype_aa_seq
         self.mutation_site = np.zeros(len(self.mutant_aa_seq))
         self.protein_ligand_conformation_latent = np.zeros((self.latent_vector_size), dtype=np.float32)
+        self.protein_ligand_protein_sequence = np.zeros((self.latent_vector_size + len(self.wildtype_aa_seq)), dtype=np.float32)
         self.binding_affinity = 0
 
         self.observations = self._get_obs()
@@ -129,7 +132,9 @@ class ProteinLigandInteractionEnv(AECEnv):
 
     def observe(self, agent):
         # observation of one agent is the previous state of the other
-        return self.observations[agent]
+        observation = self.observations[agent]
+        log.info(observation['mutation_aa_seq'])
+        return observation
 
     def step(self, action):
         log.debug(f"Action space: {self._action_spaces['mutation_site_picker'].shape}")
@@ -168,6 +173,8 @@ class ProteinLigandInteractionEnv(AECEnv):
             
             self.binding_affinity = score[0]['non_binder_prob']
             self.protein_ligand_conformation_latent = self._get_ba_model_activation()
+            aa_seq_encoded = self.encode_aa_sequence(self.mutant_aa_seq).astype(np.float32).reshape(1,-1)
+            self.protein_ligand_protein_sequence = np.concatenate((self.protein_ligand_conformation_latent, aa_seq_encoded),axis=1)
 
             self.rewards = {
                 "mutation_site_picker": 1.0 - float(self.binding_affinity),
@@ -246,6 +253,7 @@ class ProteinLigandInteractionEnv(AECEnv):
                 "mutation_aa_seq": self.mutant_aa_seq,
                 "mutation_site": self.mutation_site,
                 "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
+                "protein_ligand_protein_sequence": self.protein_ligand_protein_sequence,
                 "mask": self.mask
             },
             "mutation_site_filler": {
@@ -253,6 +261,7 @@ class ProteinLigandInteractionEnv(AECEnv):
                 "mutation_aa_seq": self.mutant_aa_seq,
                 "mutation_site": self.mutation_site,
                 "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
+                "protein_ligand_protein_sequence": self.protein_ligand_protein_sequence,
                 "mask": self.mask
             }
         }
