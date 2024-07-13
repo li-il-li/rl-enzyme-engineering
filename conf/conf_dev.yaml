@@ -1,30 +1,31 @@
 experiment:
   wildtype_AA_seq: "MSTETLRLQKARATEEGLAFETPGGLTRALRDGCFLLAVPPGFDTTPGVTLCREFFRPVEQGGESTRAYRGFRDLDGVYFDREHFQTEHVLIDGPGRERHFPPELRRMAEHMHELARHVLRTVLTELGVARELWSEVTGGAVDGRGTEWFAANHYRSERDRLGCAPHKDTGFVTVLYIEEGGLEAATGGSWTPVDPVPGCFVVNFGGAFELLTSGLDRPVRALLHRVRQCAPRPESADRFSFAAFVNPPPTGDLYRVGADGTATVARSTEDFLRDFNERTWGDGYADFGIAPPEPAGVAEDGVRA"
-  ligand_smile: "OC(=O)CCc1ccccc1"
-  # subSmiles = ['CC(=O)CCc1ccccc1', 'OC(=O)CCc1ccccc1', 'COc1cccc(CCC(O)=O)c1', 'COc1cc(CCCO)ccc1O', 'COc1cc(CCC(O)=O)ccc1O', 'OC(=O)CCc1ccc2OCOc2c1', 'COc1cc(CCCO)cc(OC)c1O', 'OC(=O)Cc1ccccc1', 'CC(=O)CCc1ccc2OCOc2c1']
+  ligand_smile: "COc1cc(C2OCC3C(c4cc(OC)c(O)cc4)OCC23)ccc1O"
   device: "cuda"
 agents:
-  sequence_edit_target_ratio: 0.05
-  epochs: 10
-  steps_per_epoch: 100
-  episode_per_collect: 3
-  batch_size: 100 
+  sequence_edit_target_ratio: 0.01
+  sequence_edit_target_ratio_penalty_k: 200
+  temperature: 0.5
+  epochs: 1000000 
+  steps_per_epoch: 20
+  steps_per_collect: 100
+  batch_size: 100
   repeat_per_collect: 1
   ppo:
-    eps: 0.1 # 0.2
-    value_clip: True
+    eps: 0.2 # 0.2
+    value_clip: False # True
     advantage_normalization: True
     recompute_advantage: False
-    reward_normalization: True
+    reward_normalization: False # True
     vf_coef: 0.5
-    ent_coef: 0.01
+    ent_coef: 0.01 # 0.01 -> 0.1
     max_grad_norm: 0.5
     gae_lambda: 0.95
     discount_factor: 0.99
   replayBuffer:
     total_size: 10000
   adam:
-    learning_rate: 2.5e-4
+    learning_rate: 0.0001 #1e-4
     epsilon: 1e-5
 evodiff:
   model_size_parameters: 640

@@ -21,7 +21,7 @@ import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torch.distributions import Categorical, Distribution, Independent, Bernoulli
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
 from ProteinSequencePolicy.policy import ProteinSequencePolicy
 from ProteinLigandGym import protein_ligand_gym_v0
 from tianshou.data import Collector, VectorReplayBuffer
@@ -32,6 +32,8 @@ from tianshou.utils.net.common import ActorCritic, Net, MLP
 from tianshou.utils.net.discrete import Actor, Critic
 from tianshou.utils import TensorboardLogger
 from tianshou.utils.logger.base import LOG_DATA_TYPE, BaseLogger
+
+from custom_graph_net import CustomGraphNet
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,6 @@ logger = logging.getLogger(__name__)
 #            self.writer.add_scalar(k, v, global_step=step)
 #        if self.write_flush:  # issue 580
 #            self.writer.flush()  # issue #482
-
 
 class CustomNet(nn.Module):
     def __init__(self, state_shape, action_shape, hidden_sizes, device):
@@ -62,7 +63,8 @@ class CustomNet(nn.Module):
         self.input_dim = int(np.prod(state_shape))
 
     def forward(self, obs, state=None, info=None):
-        obs = obs.protein_ligand_conformation_latent
+        #obs = obs.protein_ligand_conformation_latent
+        obs = obs.protein_ligand_protein_sequence
         #logger.info(f"Obs Preprocess Network: {obs.shape}")
         obs = torch.as_tensor(obs, device=self._device, dtype=torch.float32)
         logits = self.model(obs)
@@ -96,6 +98,8 @@ def main(cfg: DictConfig):
     torch.manual_seed(seed)
     
     tb_logger.write("config", 0, {"seed": seed})
+    
+    logger.info(f"Steps per episode: {cfg.agents.steps_per_epoch}")
 
     env = protein_ligand_gym_v0.env(
         render_mode="human",
@@ -103,21 +107,23 @@ def main(cfg: DictConfig):
         ligand_smile=cfg.experiment.ligand_smile,
         max_steps=cfg.agents.steps_per_epoch,
         device=device,
-        config=cfg
+        config=cfg,
     )
     seq_encoder = env.encode_aa_sequence
     env = PettingZooEnv(env)
     
     # Model PPO
-    state_shape = env.observation_space['protein_ligand_conformation_latent'].shape
+    #state_shape = env.observation_space['protein_ligand_conformation_latent'].shape
+    state_shape = env.observation_space['protein_ligand_protein_sequence'].shape
     action_shape = env.action_space.shape
 
     #logger.info(f"Action Space shape: {action_shape}")
-    net_actor = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256]*4, device=device)
+    net = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256]*4, device=device)
+    #net = CustomGraphNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256], device=device)
+
     #logger.info(f"Net: {net}")
-    actor = Actor(preprocess_net=net_actor, action_shape=action_shape, softmax_output=False, device=device)
-    net_critic = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256]*4, device=device)
-    critic = Critic(net_critic, device=device)
+    actor = Actor(preprocess_net=net, action_shape=action_shape, softmax_output=False, hidden_sizes=[256, 256, 256], device=device)
+    critic = Critic(net, hidden_sizes=[256, 256, 256] ,device=device)
     
     def actor_init(layer):
         if isinstance(layer, nn.Linear):
@@ -136,18 +142,25 @@ def main(cfg: DictConfig):
         ActorCritic(actor, critic).parameters(), lr=cfg.agents.adam.learning_rate, eps=cfg.agents.adam.epsilon
     )
 
-    def dist(logits: torch.Tensor) -> Distribution:
-        target_ratio = cfg.agents.sequence_edit_target_ratio
-        # Convert logits to probabilities
-        probs = torch.sigmoid(logits)
-        # Calculate current mean probability
-        current_ratio = probs.mean()
-        # Adjust probabilities to meet target ratio
-        adjusted_probs = probs * (target_ratio / current_ratio)
-        # Clip probabilities to valid range [0, 1]
-        adjusted_probs = torch.clamp(adjusted_probs, 0, 1)
+   # def dist(logits: torch.Tensor) -> Distribution:
+   #     target_ratio = cfg.agents.sequence_edit_target_ratio
+   #     # Convert logits to probabilities
+   #     probs = torch.sigmoid(logits)
+   #     # Calculate current mean probability
+   #     current_ratio = probs.mean()
+   #     # Adjust probabilities to meet target ratio
+   #     adjusted_probs = probs * (target_ratio / current_ratio)
+   #     # Clip probabilities to valid range [0, 1]
+   #     adjusted_probs = torch.clamp(adjusted_probs, 0, 1)
 
-        return Bernoulli(probs=adjusted_probs)
+   #     return Bernoulli(probs=adjusted_probs)
+    
+    def dist(logits: torch.Tensor) -> Distribution:
+        return Bernoulli(logits=logits)
+    
+    #lr_scheduler = LambdaLR(optim, lr_lambda=lambda e: 1 - e / epoch)
+    lr_scheduler = ReduceLROnPlateau(optimizer=optim, mode='min', factor = 0.1, patience=10)
+
     
     # PPO policy
     #logger.info(f"Observation Space: {env.observation_space['protein_ligand_conformation_latent']}")
@@ -165,7 +178,7 @@ def main(cfg: DictConfig):
         recompute_advantage=cfg.agents.ppo.recompute_advantage,
         vf_coef=cfg.agents.ppo.vf_coef,
         ent_coef=cfg.agents.ppo.ent_coef,
-        max_grad_norm=cfg.agents.ppo.max_grad_norm,
+        max_grad_norm= None, #cfg.agents.ppo.max_grad_norm,
         gae_lambda=cfg.agents.ppo.gae_lambda,
         discount_factor=cfg.agents.ppo.discount_factor,
         reward_normalization=cfg.agents.ppo.reward_normalization, # 5.1 Value Normalization
@@ -244,8 +257,8 @@ def main(cfg: DictConfig):
         repeat_per_collect=cfg.agents.repeat_per_collect,
         episode_per_test=0,
         update_per_step=1.0,
-        step_per_collect=None,
-        episode_per_collect=cfg.agents.episode_per_collect,
+        step_per_collect=cfg.agents.steps_per_collect * 2, # TODO find out why this factor is necessary
+        episode_per_collect=None,
         train_fn=None,
         test_fn=None,
         stop_fn=None,

@@ -112,6 +112,7 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.agents = copy(self.possible_agents)
         self.timestep = 0
         self.rewards = {agent: 0 for agent in self.agents}
+        self.mask_penalty = 0
         self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
@@ -121,6 +122,7 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.protein_ligand_conformation_latent = np.zeros((self.latent_vector_size), dtype=np.float32)
         self.protein_ligand_protein_sequence = np.zeros((self.latent_vector_size + len(self.wildtype_aa_seq)), dtype=np.float32)
         self.binding_affinity = 0
+        self.number_holes = 0
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
@@ -133,7 +135,6 @@ class ProteinLigandInteractionEnv(AECEnv):
     def observe(self, agent):
         # observation of one agent is the previous state of the other
         observation = self.observations[agent]
-        log.info(observation['mutation_aa_seq'])
         return observation
 
     def step(self, action):
@@ -144,6 +145,8 @@ class ProteinLigandInteractionEnv(AECEnv):
         if self.agent_selection == "mutation_site_picker":
             log.debug(f"Agent in execution: {self.agent_selection}")
             self.mutation_site = action
+            self.number_holes = np.sum(action)
+            self.mask_penalty = self._calculate_mask_penalty(action)
             log.debug(f"Mutation site: {self.mutation_site}")
 
         elif self.agent_selection == "mutation_site_filler": 
@@ -176,9 +179,10 @@ class ProteinLigandInteractionEnv(AECEnv):
             aa_seq_encoded = self.encode_aa_sequence(self.mutant_aa_seq).astype(np.float32).reshape(1,-1)
             self.protein_ligand_protein_sequence = np.concatenate((self.protein_ligand_conformation_latent, aa_seq_encoded),axis=1)
 
+            reward = (1.0 - float(self.binding_affinity) * (1.0 - self.mask_penalty))
             self.rewards = {
-                "mutation_site_picker": 1.0 - float(self.binding_affinity),
-                "mutation_site_filler": 1.0 - float(self.binding_affinity)
+                "mutation_site_picker": reward,
+                "mutation_site_filler": reward
             }
 
             # Adds .rewards to ._cumulative_rewards
@@ -198,7 +202,14 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         # Check termination conditions
         # Check model properties (if folding prop is too low)
-        self.terminations = { "mutation_site_picker": False, "mutation_site_filler": False}
+        if self.mask_penalty >= 1:
+            self.rewards = {
+                "mutation_site_picker": 1 - self.mask_penalty,
+                "mutation_site_filler": 1 - self.mask_penalty 
+            }
+            self.terminations = { "mutation_site_picker": True, "mutation_site_filler": True}
+            self._accumulate_rewards()
+            self.render()
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
@@ -207,6 +218,8 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.agents = []
 
         self.agent_selection = self._agent_selector.next()
+        
+        return self.observations, self.rewards, self.truncations, self.terminations, self.infos
 
 
     def render(self):
@@ -221,7 +234,7 @@ class ProteinLigandInteractionEnv(AECEnv):
             
             mask = self._mask_string(self.mutant_aa_seq,self.mutation_site)
             sequence = self.mutant_aa_seq
-            string = f"Step: {self.timestep}  |  Reward: {self.rewards[self.agent_selection]}" + "\n" + mask + "\n" + sequence 
+            string = f"Step: {self.timestep}  |  Reward: {self.rewards[self.agent_selection]}  |  Holes: {self.number_holes}  |  Mask Penalty: {self.mask_penalty}" + "\n" + mask + "\n" + sequence 
 
         else:
             string = "!!!!!!!!!!!!   Episode finished   !!!!!!!!!!!!"
@@ -268,8 +281,12 @@ class ProteinLigandInteractionEnv(AECEnv):
 
     def _get_infos(self):
         return {
-            "mutation_site_picker": {},
-            "mutation_site_filler": {}
+            "mutation_site_picker": {
+                "number_holes": self.number_holes,
+            },
+            "mutation_site_filler": {
+                "number_holes": self.number_holes,
+            }
         }
     
     def _get_ba_model_activation(self):
@@ -291,3 +308,12 @@ class ProteinLigandInteractionEnv(AECEnv):
         char_array[mask == 1] = '_'
         masked_string = ''.join(char_array)
         return masked_string
+    
+    def _calculate_mask_penalty(self, mask):
+        threshold = self.config.agents.sequence_edit_target_ratio
+        k = self.config.agents.sequence_edit_target_ratio_penalty_k
+        ratio = np.mean(mask)
+        if ratio == 0:
+            return 1
+        else:
+            return k * (ratio - threshold)**2

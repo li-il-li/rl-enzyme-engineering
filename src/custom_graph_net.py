@@ -6,14 +6,15 @@ from torch_geometric.utils import unbatch
 import numpy as np
 
 class CustomGraphNet(nn.Module):
-    def __init__(self, observation_shape, hidden_sizes, device):
+    def __init__(self, state_shape, action_shape, hidden_sizes, device):
         super().__init__()
         self.device = device
-        
-        # Assuming observation_shape includes information about the graph structure
-        self.node_feature_size = observation_shape['node_features']
-        self.edge_feature_size = observation_shape['edge_features']
-        self.latent_size = observation_shape['text_embedding']
+        self.action_shape = action_shape
+
+        # Assuming state_shape is a dictionary with the following keys:
+        self.node_feature_size = state_shape['node_features']
+        self.edge_feature_size = state_shape['edge_features']
+        self.latent_size = state_shape['text_embedding']
 
         self.leaky_relu = nn.LeakyReLU()
 
@@ -39,13 +40,14 @@ class CustomGraphNet(nn.Module):
         # Final layers
         self.dense1 = nn.Linear(64, hidden_sizes[-1])
         self.ln_final = nn.LayerNorm(hidden_sizes[-1])
+        self.output_layer = nn.Linear(hidden_sizes[-1], int(np.prod(action_shape)))
 
-        self.output_dim = hidden_sizes[-1]
+        self.output_dim = int(np.prod(action_shape))
 
-    def forward(self, obs, state=None):
-        # Assuming obs contains graph data and text embeddings
-        graph_data = obs['graph_data']  # This should be a PyG Data or Batch object
-        text_embeddings = obs['text_embeddings']  # This should be a tensor of shape (batch_size, latent_size)
+    def forward(self, obs, state=None, info={}):
+        # Assuming obs is a dictionary with 'graph_data' and 'text_embeddings' keys
+        graph_data = obs['graph_data'].to(self.device)  # This should be a PyG Data or Batch object
+        text_embeddings = obs['text_embeddings'].to(self.device)  # This should be a tensor of shape (batch_size, latent_size)
 
         x, edge_index, edge_attr = graph_data.x, graph_data.edge_index, graph_data.edge_attr
         batch = graph_data.batch
@@ -65,10 +67,19 @@ class CustomGraphNet(nn.Module):
         # Global pooling
         x = self.pool(x, batch)
 
-        # Final layer
-        logits = self.leaky_relu(self.ln_final(self.dense1(x)))
+        # Final layers
+        x = self.leaky_relu(self.ln_final(self.dense1(x)))
+        logits = self.output_layer(x)
 
         return logits, state
+
+    def get_output_dim(self):
+        return self.output_dim
+
+    def get_input_dim(self):
+        # This should return the total dimension of your input
+        # Including both graph features and text embeddings
+        return self.node_feature_size + self.edge_feature_size + self.latent_size
 
 class CrossAttentionGraphBlock(nn.Module):
     def __init__(self, num_heads, node_feature_size, latent_size, dropout=0.1):
