@@ -179,7 +179,7 @@ class ProteinLigandInteractionEnv(AECEnv):
             aa_seq_encoded = self.encode_aa_sequence(self.mutant_aa_seq).astype(np.float32).reshape(1,-1)
             self.protein_ligand_protein_sequence = np.concatenate((self.protein_ligand_conformation_latent, aa_seq_encoded),axis=1)
 
-            reward = (1.0 - float(self.binding_affinity) * (1.0 - self.mask_penalty))
+            reward = self.config.agents.binding_affinity_k * (1.0 - float(self.binding_affinity)+1) - self.mask_penalty
             self.rewards = {
                 "mutation_site_picker": reward,
                 "mutation_site_filler": reward
@@ -202,10 +202,10 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         # Check termination conditions
         # Check model properties (if folding prop is too low)
-        if self.mask_penalty >= 1:
+        if self.mask_penalty >= (1 * self.config.agents.binding_affinity_k):
             self.rewards = {
-                "mutation_site_picker": 1 - self.mask_penalty,
-                "mutation_site_filler": 1 - self.mask_penalty 
+                "mutation_site_picker": np.random.randint(0, self.config.agents.binding_affinity_k) - self.mask_penalty,
+                "mutation_site_filler": np.random.randint(0, self.config.agents.binding_affinity_k) - self.mask_penalty 
             }
             self.terminations = { "mutation_site_picker": True, "mutation_site_filler": True}
             self._accumulate_rewards()
@@ -314,6 +314,6 @@ class ProteinLigandInteractionEnv(AECEnv):
         k = self.config.agents.sequence_edit_target_ratio_penalty_k
         ratio = np.mean(mask)
         if ratio == 0:
-            return 1
+            return 10 # TODO Maybe 100 is even better
         else:
-            return k * (ratio - threshold)**2
+            return k * (ratio - threshold)**3

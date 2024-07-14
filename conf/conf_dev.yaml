@@ -3,8 +3,9 @@ experiment:
   ligand_smile: "COc1cc(C2OCC3C(c4cc(OC)c(O)cc4)OCC23)ccc1O"
   device: "cuda"
 agents:
-  sequence_edit_target_ratio: 0.01
-  sequence_edit_target_ratio_penalty_k: 200
+  binding_affinity_k: 1
+  sequence_edit_target_ratio: 0.05
+  sequence_edit_target_ratio_penalty_k: 2000
   temperature: 0.5
   epochs: 1000000 
   steps_per_epoch: 20
