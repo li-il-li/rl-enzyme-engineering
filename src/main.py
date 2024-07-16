@@ -33,7 +33,7 @@ from tianshou.utils.net.discrete import Actor, Critic
 from tianshou.utils import TensorboardLogger
 from tianshou.utils.logger.base import LOG_DATA_TYPE, BaseLogger
 
-from custom_graph_net import CustomGraphNet
+from custom_graph_net_3 import CustomGraphNet
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +118,13 @@ def main(cfg: DictConfig):
     action_shape = env.action_space.shape
 
     #logger.info(f"Action Space shape: {action_shape}")
-    net = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256]*4, device=device)
+    #net = CustomNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256]*4, device=device)
     #net = CustomGraphNet(state_shape=state_shape, action_shape=action_shape, hidden_sizes=[256], device=device)
+    net = CustomGraphNet(
+        state_shape=env.observation_space,
+        action_shape=env.action_space.shape,
+        device=device
+    )
 
     #logger.info(f"Net: {net}")
     actor = Actor(preprocess_net=net, action_shape=action_shape, softmax_output=False, hidden_sizes=[256, 256, 256], device=device)

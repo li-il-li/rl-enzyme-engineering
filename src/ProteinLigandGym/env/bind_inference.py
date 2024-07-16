@@ -64,18 +64,49 @@ def init_BIND(device):
     model.eval()
     model.to(device)
     
-    activation = None
+    log.info(f"Model BIND: {model}")
     
+    activation = None
     def hook_fn(module, input, output):
         nonlocal activation
         activation = output.detach().cpu()
-    
+
     hook = model.dense2.register_forward_hook(hook_fn)
 
     def get_activation():
         return activation.numpy()
+    
+    crossattention4_graph_batch = None
+    crossattention4_hidden_states_30 = None
+    crossattention4_padding_mask = None
+    def hook_fn_crossattention4(module, input, output):
+        nonlocal crossattention4_graph_batch, crossattention4_hidden_states_30, crossattention4_padding_mask
+        crossattention4_graph_batch, crossattention4_hidden_states_30, crossattention4_padding_mask = (
+            input[1].detach().cpu().numpy(),
+            input[2].detach().cpu().numpy(),
+            input[3].detach().cpu().numpy()
+        )
+    hook_crossattention4 = model.crossattention4.register_forward_hook(hook_fn_crossattention4)
+    
+    def get_crossattention4_inputs():
+        return crossattention4_graph_batch, crossattention4_hidden_states_30, crossattention4_padding_mask
+    
+    conv5_x = None
+    conv5_a = None
+    conv5_e = None
+    def hook_fn_conv5(module, input, output):
+        nonlocal conv5_x, conv5_a, conv5_e
+        conv5_x, conv5_a, conv5_e = (
+            input[0].detach().cpu().numpy(),
+            input[1].detach().cpu().numpy(),
+            input[2].detach().cpu().numpy()
+        )
+    hook_conv5 = model.conv5.register_forward_hook(hook_fn_conv5)
 
-    return model, get_activation, model.dense2.out_features, esm_model, esm_tokeniser
+    def get_conv5_inputs():
+        return conv5_x, conv5_a, conv5_e
+
+    return model, get_activation, model.dense2.out_features, esm_model, esm_tokeniser, get_conv5_inputs, get_crossattention4_inputs
 
 
 def get_graph(smiles):
