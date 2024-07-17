@@ -82,15 +82,16 @@ class CustomGraphNet(nn.Module):
         batch = torch.as_tensor(obs['bind_crossattention4_graph_batch'], dtype=torch.long, device=self._device)
         hidden_states = torch.as_tensor(obs['bind_crossattention4_hidden_states_30'], dtype=torch.float32, device=self._device).squeeze(0)
         attention_mask = torch.as_tensor(obs['bind_crossattention4_padding_mask'], dtype=torch.bool, device=self._device).squeeze(0)
-        
-        # Reshape tensors
-        x = x.view(-1, self.node_feature_dim)  # [48, 64]
-        a = a.view(2, -1)  # [2, 102]
-        e = e.view(-1, self.edge_feature_dim)  # [102, 2]
-        batch = batch.view(-1)  # [48]
-        hidden_states = hidden_states.squeeze(0)  # [307, 1280]
-        attention_mask = attention_mask.squeeze(0)  # [307]
 
+        print(f"Initial tensor shapes:")
+        print(f"  x: {x.shape}")
+        print(f"  a: {a.shape}")
+        print(f"  e: {e.shape}")
+        print(f"  batch: {batch.shape}")
+        print(f"  hidden_states: {hidden_states.shape}")
+        print(f"  attention_mask: {attention_mask.shape}")
+
+        
         # Graph convolutions
         x = self.conv1(x, a, e)
         x = self.leaky_relu(x)
