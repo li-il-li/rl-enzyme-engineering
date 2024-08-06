@@ -3,9 +3,20 @@ experiment:
   ligand_smile: "COc1cc(C2OCC3C(c4cc(OC)c(O)cc4)OCC23)ccc1O"
   device: "cuda"
 agents:
-  binding_affinity_k: 1
+  picker:
+    self_determination: 3 
+  # Reward:
+  max_cluster_size_ratio: 0.1
+  large_cluster_penalty: 0.5
+  edit_penalty: 0.01
+  no_edit_penalty: 100.0
+  binding_affinity_weight: 1 #10
+  clustering_score_k: 2
+  #
+  binding_affinity_k: 10
   sequence_edit_target_ratio: 0.05
   sequence_edit_target_ratio_penalty_k: 2000
+  clustering_weight: 0.5
   temperature: 0.5
   epochs: 1000000 
   steps_per_epoch: 20

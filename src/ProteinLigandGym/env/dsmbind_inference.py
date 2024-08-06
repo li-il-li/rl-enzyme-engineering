@@ -71,6 +71,9 @@ class DrugAllAtomEnergyModel(FARigidModel):
         return X + c1 * cross(w, X) + c2 * cross(w, cross(w, X))
 
     def forward(self, binder, target, use_sidechain=True):
+        print(f"Type of binder: {type(binder)}")
+        print(f"Length of binder: {len(binder) if isinstance(binder, (list, tuple)) else 'N/A'}")
+        print(f"Contents of binder: {binder}")
         true_X, mol_batch, bind_A, _ = binder
         tgt_X, tgt_S, tgt_A, _ = target
         bind_S = self.mpn(mol2graph(mol_batch))

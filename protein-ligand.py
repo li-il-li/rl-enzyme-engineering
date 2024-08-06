@@ -86,7 +86,7 @@ ligands_extended = [
 ]
 
 
-ba_model, get_ba_activations, latent_vector_size, esm_model, esm_tokeniser = init_BIND(device) # still small model
+ba_model, get_ba_activations, latent_vector_size, esm_model, esm_tokeniser, get_conv5_inputs, get_crossattention4_inputs = init_BIND(device)
 
 # %%
 for ligand in ligands:
@@ -173,6 +173,42 @@ lignin_focus_compounds = [
     'OC(=O)CCc1ccc(O)cc1',     # 3-(4-Hydroxyphenyl)propionic acid
 ]
 
+
+for ligand in lignin_focus_compounds:
+    score = predict_binder(ba_model, esm_model, esm_tokeniser, device, [mutant_aa_seq], ligand)
+    print(score)
+    
+# %%
+lignin_focus_compounds = [
+    # Lignin Monomers and Derivatives
+    'OCC(O)Cc1ccc(O)c(OC)c1',  # Dihydroconiferyl alcohol
+    'OCC(O)Cc1cc(OC)c(O)c(OC)c1',  # Dihydrosinapyl alcohol
+    'CCCc1ccc(O)c(OC)c1',  # 4-Propylguaiacol
+    'CCCc1cc(OC)c(O)c(OC)c1',  # 4-Propylsyringol
+    'COc1cc(/C=C/C)ccc1O',  # trans-Isoeugenol
+    'COc1cc(/C=C/C)cc(OC)c1O',  # trans-4-Propenylsyringol
+    'OCC=Cc1ccc(O)c(OC)c1',  # Coniferyl alcohol
+    'OCC=Cc1cc(OC)c(O)c(OC)c1',  # Sinapyl alcohol
+
+    # Hydroxycinnamic Acids
+    'COc1cc(/C=C/C(=O)O)ccc1O',  # Ferulic acid
+    'COc1cc(/C=C/C(=O)O)cc(OC)c1O',  # Sinapic acid
+    'OC(=O)/C=C/c1ccc(O)c(O)c1',  # Caffeic acid
+    'OC(=O)/C=C/c1ccc(O)cc1',  # p-Coumaric acid
+
+    # Other Relevant Compounds
+    'COc1cccc(CCC(=O)O)c1',  # 3-3-Methoxyphenylpropionic acid
+
+    # Compounds from your original list that are also relevant
+    'COc1cc(C=O)ccc1O',  # Vanillin
+    'COc1cc(C(=O)O)ccc1O',  # Vanillic acid
+    'COc1cc(C=O)cc(OC)c1O',  # Syringaldehyde
+    'COc1ccccc1O',  # Guaiacol
+    'COc1cc(OC)c(O)c(OC)c1',  # Syringol
+    'Oc1ccccc1O',  # Catechol
+    'O=Cc1ccc(O)c(O)c1',  # Protocatechualdehyde
+    'OC(=O)CCc1ccc(O)cc1',  # 3-(4-Hydroxyphenyl)propionic acid
+]
 
 for ligand in lignin_focus_compounds:
     score = predict_binder(ba_model, esm_model, esm_tokeniser, device, [mutant_aa_seq], ligand)

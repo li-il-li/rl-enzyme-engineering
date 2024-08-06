@@ -19,6 +19,8 @@ import time
 import os
 import torch
 from torch import nn
+import torch.nn.functional as F
+from torch.distributions import Distribution
 from torch.utils.tensorboard import SummaryWriter
 from torch.distributions import Categorical, Distribution, Independent, Bernoulli
 from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
@@ -75,6 +77,34 @@ class CustomNet(nn.Module):
 
     def get_input_dim(self):
         return self.input_dim
+    
+class GumbelSoftmaxDistribution(Distribution):
+    def __init__(self, logits, temperature=1.0):
+        super().__init__()
+        self.logits = logits
+        self.temperature = temperature
+
+    def sample(self, sample_shape=torch.Size()):
+        return self.rsample(sample_shape)
+
+    def rsample(self, sample_shape=torch.Size()):
+        gumbel_noise = -torch.log(-torch.log(torch.rand_like(self.logits)))
+        y_soft = F.softmax((self.logits + gumbel_noise) / self.temperature, dim=-1)
+        
+        # Straight-through estimator
+        index = y_soft.max(-1, keepdim=True)[1]
+        y_hard = torch.zeros_like(self.logits).scatter_(-1, index, 1.0)
+        ret = y_hard - y_soft.detach() + y_soft
+        
+        return ret
+
+    def log_prob(self, value):
+        # Compute log probability using softmax
+        return (F.log_softmax(self.logits, dim=-1) * value).sum(-1)
+
+    def entropy(self):
+        return -(F.softmax(self.logits, dim=-1) * F.log_softmax(self.logits, dim=-1)).sum(-1)
+
 
 
 @hydra.main(version_base=None, config_path="../conf/", config_name='conf_dev')
@@ -163,6 +193,9 @@ def main(cfg: DictConfig):
     def dist(logits: torch.Tensor) -> Distribution:
         return Bernoulli(logits=logits)
     
+    def gumbel_dist(logits: torch.Tensor) -> Distribution:
+        return GumbelSoftmaxDistribution(logits)
+    
     #lr_scheduler = LambdaLR(optim, lr_lambda=lambda e: 1 - e / epoch)
     lr_scheduler = ReduceLROnPlateau(optimizer=optim, mode='min', factor = 0.1, patience=10)
 
@@ -174,7 +207,7 @@ def main(cfg: DictConfig):
         actor=actor,
         critic=critic,
         optim=optim,
-        dist_fn=dist,
+        dist_fn=gumbel_dist,
         action_space=env.action_space,
         eps_clip=cfg.agents.ppo.eps,
         dual_clip=None,
