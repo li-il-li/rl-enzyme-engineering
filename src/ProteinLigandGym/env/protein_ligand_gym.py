@@ -19,8 +19,51 @@ from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
 # BIND
 from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder
 
-NUM_ITERS = 10
+import heapq
+import json
+import threading
+import queue
 
+class TopSequencesTracker:
+    def __init__(self, max_size=1000, filename='top_sequences.json'):
+        self.max_size = max_size
+        self.filename = filename
+        self.sequences = []
+        self.load_from_file()
+        self.save_queue = queue.Queue()
+        self.save_thread = threading.Thread(target=self._save_worker, daemon=True)
+        self.save_thread.start()
+
+    def add_sequence(self, amino_acid, value1, value2):
+        # Use value1 directly for max-heap behavior
+        if len(self.sequences) < self.max_size:
+            heapq.heappush(self.sequences, (value1, amino_acid, value2))
+        elif value1 > self.sequences[0][0]:
+            heapq.heapreplace(self.sequences, (value1, amino_acid, value2))
+        self.save_queue.put(self.get_top_sequences())
+
+    def get_top_sequences(self):
+        return sorted([(seq[1], seq[0], seq[2]) for seq in self.sequences],
+                      key=lambda x: x[1], reverse=True)
+
+    def _save_worker(self):
+        while True:
+            data = self.save_queue.get()
+            with open(self.filename, 'w') as f:
+                json.dump(data, f)
+            self.save_queue.task_done()
+
+    def load_from_file(self):
+        try:
+            with open(self.filename, 'r') as f:
+                data = json.load(f)
+            self.sequences = [(value1, amino_acid, value2)
+                              for amino_acid, value1, value2 in data]
+            heapq.heapify(self.sequences)
+        except FileNotFoundError:
+            print(f"File {self.filename} not found. Starting with an empty list.")
+
+NUM_ITERS = 10
 log = logging.getLogger(__name__)
 
 class ProteinLigandInteractionEnv(AECEnv):
@@ -49,6 +92,9 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.ligand_dict['smile'] = ligand_smile
         self.ligand_dict['mol_structure'], self.ligand_dict['mol_features'] = prepare_ligand(ligand_smile)
 
+        # Tracker
+        self.tracker = TopSequencesTracker()
+        
         # Protein
         self.wildtype_aa_seq = wildtype_aa_seq
 
@@ -66,12 +112,13 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.get_crossattention4_inputs
         ) = init_BIND(device) # still small model
 
-        log.info("Loading folding model ...")
-        self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
-        log.info("Loading docking model ...")
-        self.docking_model, self.structure_tokenizer, self.structure_alphabet = init_fabind(device=device)
-        log.info("Loading binding affinity prediction model ...")
-        self.ba_model_struct = init_DSMBind(device=device)
+        # Structure based models
+        #log.info("Loading folding model ...")
+        #self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
+        #log.info("Loading docking model ...")
+        #self.docking_model, self.structure_tokenizer, self.structure_alphabet = init_fabind(device=device)
+        #log.info("Loading binding affinity prediction model ...")
+        #self.ba_model_struct = init_DSMBind(device=device)
         
         # PettingZoo Env
         self.timestep = None
@@ -99,12 +146,12 @@ class ProteinLigandInteractionEnv(AECEnv):
                     "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
                     "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32),
                     "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32),
-                    "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[48], dtype=np.int64), # Torch dtypes sadly unsupported
+                    "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
                     "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
                     "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=np.bool),
-                    "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[48, 64], dtype=np.float32),
-                    "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 102], dtype=np.int64),
-                    "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[102, 2], dtype=np.float32),
+                    "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[26, 64], dtype=np.float32),
+                    "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 52], dtype=np.int64),
+                    "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[52, 2], dtype=np.float32),
                 }
             ),
             "mutation_site_filler": spaces.Dict(
@@ -113,12 +160,12 @@ class ProteinLigandInteractionEnv(AECEnv):
                     "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
                     "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32),
                     "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32),
-                    "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[48], dtype=np.int64), # Torch dtypes sadly unsupported
+                    "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
                     "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
                     "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=np.bool),
-                    "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[48, 64], dtype=np.float32),
-                    "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 102], dtype=np.int64),
-                    "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[102, 2], dtype=np.float32),
+                    "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[26, 64], dtype=np.float32),
+                    "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 52], dtype=np.int64),
+                    "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[52, 2], dtype=np.float32),
                 }
             )
         }
@@ -162,6 +209,7 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.bind_conv5_e = np.zeros(bind_conv5_e_space.shape, dtype=bind_conv5_e_space.dtype)
 
         self.binding_affinity = 0
+        self.binding_affinity_struct = 0
         self.number_holes = 0
 
         self.observations = self._get_obs()
@@ -194,20 +242,21 @@ class ProteinLigandInteractionEnv(AECEnv):
             log.debug(f"Action sequence: {self.mutant_aa_seq}")
             
 
-            log.info("Generate conformations ...")
-            conformation_structures, pdb_files = generate_conformation_ensemble(self.folding_model,
-                                                                     self.config,
-                                                                     [self.mutant_aa_seq])
-            self.conformation_structures = conformation_structures
-            
-            log.info("Dock Proteins to ligand ...")
-            fabind_dataset = create_FABindPipelineDataset(conformation_structures,
-                                                          self.ligand_dict,
-                                                          self.structure_tokenizer,
-                                                          self.structure_alphabet)
-            protein_ligand_conformations_mols = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
-            
-            self.binding_affinity = self.ba_model_struct.virtual_screen(pdb_files[0], protein_ligand_conformations_mols)
+            #log.info("Generate conformations ...")
+            #conformation_structures, pdb_files = generate_conformation_ensemble(self.folding_model,
+            #                                                         self.config,
+            #                                                         [self.mutant_aa_seq])
+            #self.conformation_structures = conformation_structures
+            #
+            #log.info("Dock Proteins to ligand ...")
+            #fabind_dataset = create_FABindPipelineDataset(conformation_structures,
+            #                                              self.ligand_dict,
+            #                                              self.structure_tokenizer,
+            #                                              self.structure_alphabet)
+            #protein_ligand_conformations_mols = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
+            #
+            #ba_struct = self.ba_model_struct.virtual_screen(pdb_files[0], protein_ligand_conformations_mols)
+            #self.binding_affinity_struct = ba_struct[0][1].cpu().item()
             
             score = predict_binder(self.ba_model, self.esm_model, self.esm_tokeniser, self.device,
                                    [self.mutant_aa_seq], self.ligand_dict['smile'])
@@ -223,6 +272,7 @@ class ProteinLigandInteractionEnv(AECEnv):
                 self.bind_conv5_a,
                 self.bind_conv5_e,
             ) = self._get_ba_model_activation()
+            
 
             aa_seq_encoded = self.encode_aa_sequence(self.mutant_aa_seq).astype(np.float32).reshape(1,-1)
             self.protein_ligand_protein_sequence = np.concatenate((self.protein_ligand_conformation_latent, aa_seq_encoded),axis=1)
@@ -236,9 +286,11 @@ class ProteinLigandInteractionEnv(AECEnv):
                 self.num_edits
             ) = self._calculate_comprehensive_reward(self.mutation_site)
             self.rewards = {
-                "mutation_site_picker": self.binding_reward, #reward,
-                "mutation_site_filler": self.binding_reward #reward
+                "mutation_site_picker": self.binding_reward, #self.binding_affinity_struct, #, #reward,
+                "mutation_site_filler": self.binding_reward #self.binding_affinity_struct #self.binding_reward #reward
             }
+
+            self.tracker.add_sequence(self.mutant_aa_seq, self.binding_reward, 0)
 
             # Adds .rewards to ._cumulative_rewards
             self._accumulate_rewards()
