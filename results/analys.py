@@ -393,6 +393,74 @@ for index, row in top_10_pareto.iterrows():
 
 # %%
 diffdock_prob = [
-    '',
-    
+    0.69,
+    0.73,
+    0.43,
+    0.32,
+    0.17,
+    0.73,
+    0.46,
+    0.63,
+    1.09,
+    1.64
 ]
+
+# %%
+auto_dock_affinity = [
+    -5.543,
+    -5.822,
+    -5.466,
+    -5.377,
+    -5.647,
+    -6.301,
+    -6.129,
+    -5.753,
+    -5.644,
+    -5.724
+]
+
+# %%
+pTM = [
+    0.9,
+    0.89,
+    0.9,
+    0.9,
+    0.91,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.91
+]
+
+# %%
+top_10_pareto['diffdock_confidence'] = diffdock_prob
+top_10_pareto['autodock_affinity'] = auto_dock_affinity
+top_10_pareto['alphafold3_ptm'] = pTM
+
+# %%
+top_10_pareto
+
+# %%
+wildtype = {
+    'name': 'wildtype', 
+    'sequence': wildtype,
+    'reward': 0.54,
+    'carp640': -0.43214040994644165,
+    'esm': -0.350832462310791,
+    'esm6': -2.2300071716308594,
+    'pLDDT': 78.02305649241147,
+    'diffdock_confidence': 0.48,
+    'autodock_affinity': -5.472,
+    'alphafold3_ptm': 0.91
+}
+# %%
+struct = bsio.load_structure("./data/sequence_rl_low_ent/pdb/wildtype.pdb", extra_fields=["b_factor"])
+print(struct.b_factor.mean())  # this will be the pLDDT
+
+# %%
+top_10_pareto.loc[len(top_10_pareto)] = wildtype
+top_10_pareto
+
+# %%
+top_10_pareto.to_csv('results.csv', index=True)

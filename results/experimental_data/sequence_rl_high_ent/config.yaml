@@ -1,0 +1,58 @@
+experiment:
+  wildtype_AA_seq: MSTETLRLQKARATEEGLAFETPGGLTRALRDGCFLLAVPPGFDTTPGVTLCREFFRPVEQGGESTRAYRGFRDLDGVYFDREHFQTEHVLIDGPGRERHFPPELRRMAEHMHELARHVLRTVLTELGVARELWSEVTGGAVDGRGTEWFAANHYRSERDRLGCAPHKDTGFVTVLYIEEGGLEAATGGSWTPVDPVPGCFVVNFGGAFELLTSGLDRPVRALLHRVRQCAPRPESADRFSFAAFVNPPPTGDLYRVGADGTATVARSTEDFLRDFNERTWGDGYADFGIAPPEPAGVAEDGVRA
+  ligand_smile: CCCc1ccc(O)c(OC)c1
+  device: cuda
+agents:
+  picker:
+    self_determination: 1
+  max_cluster_size_ratio: 0.1
+  large_cluster_penalty: 0.5
+  edit_penalty: 0.01
+  no_edit_penalty: 100.0
+  binding_affinity_weight: 1
+  clustering_score_k: 2
+  binding_affinity_k: 10
+  sequence_edit_target_ratio: 0.05
+  sequence_edit_target_ratio_penalty_k: 2000
+  clustering_weight: 0.5
+  temperature: 0.5
+  epochs: 1000000
+  steps_per_epoch: 20
+  steps_per_collect: 100
+  batch_size: 100
+  repeat_per_collect: 1
+  ppo:
+    eps: 0.2
+    value_clip: false
+    advantage_normalization: true
+    recompute_advantage: false
+    reward_normalization: false
+    vf_coef: 0.5
+    ent_coef: 0.1
+    max_grad_norm: 0.5
+    gae_lambda: 0.95
+    discount_factor: 0.99
+  replayBuffer:
+    total_size: 10000
+  adam:
+    learning_rate: 0.0001
+    epsilon: 1.0e-05
+evodiff:
+  model_size_parameters: 640
+  mutations: 5
+alphaflow:
+  ckpt: /root/projects/rl-enzyme-engineering/ckpts/AlphaFlow/esmflow_md_distilled_202402.pt
+  samples: 1
+  noisy_first: true
+  no_diffusion: true
+  self_cond: false
+  tmax: 0.1
+  steps: 10
+fabind:
+  ckpt: /root/projects/rl-enzyme-engineering/ckpts/FABind/FABind_plus/fabind_plus_best_ckpt.bin
+  seed: 244
+  batch_size: 8
+  sample_size: 10
+  post_optim: true
+dsmbind:
+  ckpt: fasdf
