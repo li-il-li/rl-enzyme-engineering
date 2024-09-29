@@ -1,83 +1,79 @@
 # %%
 import pandas as pd
 import matplotlib.pyplot as plt
+
+# Read the CSV files
+high_entropy = pd.read_csv('/root/projects/rl-enzyme-engineering/results/experimental_data/sequence_rl_high_ent/training/reward.csv')
+low_entropy = pd.read_csv('/root/projects/rl-enzyme-engineering/results/experimental_data/sequence_rl_low_ent/training/reward.csv')
+
+# Create the plot
+plt.figure(figsize=(12, 6))
+
+# Plot high entropy data
+plt.plot(high_entropy['Step'], high_entropy['Value'], label='High Entropy', color='blue')
+
+# Plot low entropy data
+plt.plot(low_entropy['Step'], low_entropy['Value'], label='Low Entropy', color='red')
+
+# Customize the plot
+plt.title('Comparison of High and Low Entropy Coefficient Runs')
+plt.xlabel('Step')
+plt.ylabel('Value')
+plt.legend()
+plt.grid(True)
+
+# Show the plot
+plt.show()
+
+# Optionally, save the plot
+# plt.savefig('entropy_comparison.png')
+
+# %%
+import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 
-def read_csv(file_path):
-    return pd.read_csv(file_path)
+# Read the CSV files
+high_entropy = pd.read_csv('/root/projects/rl-enzyme-engineering/results/experimental_data/sequence_rl_high_ent/training/reward.csv')
+low_entropy = pd.read_csv('/root/projects/rl-enzyme-engineering/results/experimental_data/sequence_rl_low_ent/training/reward.csv')
 
-def create_reward_plot(base_path_high, base_path_low):
-    df1 = read_csv(base_path_high + 'reward.csv')
-    df2 = read_csv(base_path_low + 'reward.csv')
+# Calculate time in hours
+high_entropy['Hours'] = (high_entropy['Wall time'] - high_entropy['Wall time'].iloc[0]) / 3600
+low_entropy['Hours'] = (low_entropy['Wall time'] - low_entropy['Wall time'].iloc[0]) / 3600
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(df1['Step'], df1['Value'], label='High Entropy Run')
-    plt.plot(df2['Step'], df2['Value'], label='Low Entropy Run')
-    plt.xlabel('Mutations')
-    plt.ylabel('Reward Value')
-    plt.title('Reward Comparison')
-    plt.legend()
-    plt.grid(True)
-    plt.xscale('log')
-    
-    # Add vertical lines at powers of 10
-    for j in range(int(np.log10(df1['Step'].min())), int(np.log10(df1['Step'].max()))+1):
-        plt.axvline(10**j, color='gray', linestyle='--', alpha=0.5)
-    
-    plt.gca().xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format(int(x), ',')))
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.savefig("reward_comparison.png", dpi=300)
-    plt.close()
+# Create the plot
+fig, ax1 = plt.subplots(figsize=(12, 6))
 
-def create_other_plots(metrics, base_path_high, base_path_low):
-    n_metrics = len(metrics)
-    fig, axs = plt.subplots(n_metrics, 1, figsize=(12, 3*n_metrics), sharex=True)
-    fig.suptitle('Comparison of Training Runs', fontsize=16)
+# Plot high entropy data
+ax1.plot(high_entropy['Step'], high_entropy['Value'], label='Entropy Coefficient = 0.1', color='blue')
 
-    for i, (metric, ylabel, filename) in enumerate(metrics):
-        try:
-            df1 = read_csv(base_path_high + filename)
-            df2 = read_csv(base_path_low + filename)
+# Plot low entropy data
+ax1.plot(low_entropy['Step'], low_entropy['Value'], label='Entropy Coefficient = 0.01', color='red')
 
-            axs[i].plot(df1['Step'], df1['Value'], label='High Entropy Run')
-            axs[i].plot(df2['Step'], df2['Value'], label='Low Entropy Run')
-            axs[i].set_ylabel(ylabel)
-            axs[i].set_title(f"{metric.replace('_', ' ').title()}")
-            axs[i].legend()
-            axs[i].grid(True)
-            axs[i].set_xscale('log')
-            
-            # Add vertical lines at powers of 10
-            for j in range(int(np.log10(df1['Step'].min())), int(np.log10(df1['Step'].max()))+1):
-                axs[i].axvline(10**j, color='gray', linestyle='--', alpha=0.5)
-            
-            axs[i].xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format(int(x), ',')))
-            
-            print(f"Added comparison plot for {metric}")
-        except Exception as e:
-            print(f"Error creating plot for {metric}: {str(e)}")
-            axs[i].text(0.5, 0.5, f"Error: {str(e)}", ha='center', va='center')
+# Customize the primary axis (Steps)
+ax1.set_xlabel('Step')
+ax1.set_ylabel('Value')
+ax1.tick_params(axis='x', labelcolor='black')
 
-    axs[-1].set_xlabel('Gradient Steps')
-    plt.setp(axs[-1].xaxis.get_majorticklabels(), rotation=45, ha='right')
-    plt.tight_layout()
-    plt.savefig("other_metrics_comparison.png", dpi=300)
-    plt.close()
+# Create a secondary x-axis for time in hours
+ax2 = ax1.twiny()
+ax2.set_xlim(ax1.get_xlim())
+ax2.set_xlabel('Time (hours)')
 
-base_path_high = '/root/projects/rl-enzyme-engineering/results/data/sequence_rl_high_ent/training/'
-base_path_low = '/root/projects/rl-enzyme-engineering/results/data/sequence_rl_low_ent/training/'
+# Set the tick locations and labels for the secondary axis
+max_hours = max(high_entropy['Hours'].max(), low_entropy['Hours'].max())
+ax2.set_xticks(ax1.get_xticks())
+ax2.set_xticklabels([f'{h:.1f}' for h in np.linspace(0, max_hours, len(ax1.get_xticks()))])
 
-# Create reward plot
-create_reward_plot(base_path_high, base_path_low)
-print("Reward comparison plot has been created and saved as 'reward_comparison.png'.")
+# Customize the plot
+plt.title('Comparison of High and Low Entropy Coefficient Runs')
+ax1.legend()
+ax1.grid(True)
 
-# Create other metrics plots
-other_metrics = [
-    ('entropy', 'Entropy Value', 'site_picker_ent.csv'),
-    ('site_picker_loss', 'Loss Value', 'site_picker_loss.csv'),
-    ('value_loss', 'Loss Value', 'value_function.csv')
-]
+# Show the plot
+plt.tight_layout()
+plt.show()
 
-create_other_plots(other_metrics, base_path_high, base_path_low)
-print("Other metrics comparison plot has been created and saved as 'other_metrics_comparison.png'.")
+# Optionally, save the plot
+plt.savefig('entropy_comparison_with_time.png')
