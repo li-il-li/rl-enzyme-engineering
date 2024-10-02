@@ -33,16 +33,18 @@ RUN apt-get update \
 
 # Setup Python
 RUN add-apt-repository ppa:deadsnakes/ppa \
- && apt-get install -y python3.10 python3.10-venv python3.10-distutil python3.8 python3.8-venv python3.8-distutil \
+ && apt-get install -y python3.10 python3.10-venv python3.10-distutil \
  && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Install utilities
-
 ## Lazygit
 RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
  && curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz" \
  && tar xf lazygit.tar.gz lazygit \
  && install lazygit /usr/local/bin
+
+## uv 
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Model Dependencies
 
