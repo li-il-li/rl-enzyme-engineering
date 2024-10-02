@@ -6,6 +6,7 @@ primary_region = 'ord'
 
 [[vm]]
   size = 'a100-40gb'
+  memory = '64gb'
   
 [[mounts]]
 source = "projects"

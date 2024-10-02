@@ -20,7 +20,7 @@ RUN apt install -y --no-install-recommends cuda-toolkit-11-8 \
 
 # Setup SSH
 RUN apt-get update \
- && apt-get install -y openssh-server curl git rclone neovim unzip g++ zlib1g-dev software-properties-common \
+ && apt-get install -y openssh-server curl git rclone screen neovim unzip g++ zlib1g-dev software-properties-common \
  && cp /etc/ssh/sshd_config /etc/ssh/sshd_config-original \
  && sed -i 's/^#\s*Port.*/Port 2222/' /etc/ssh/sshd_config \
  && sed -i 's/^#\s*PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config \
@@ -33,7 +33,10 @@ RUN apt-get update \
 
 # Setup Python
 RUN add-apt-repository ppa:deadsnakes/ppa \
- && apt-get install -y python3.10 python3.10-venv python3.10-distutil python3.8 python3.8-venv python3.8-distutil \
+ && apt-get install -y  \
+ python3.11 python3.11-venv python3.11-distutil \
+ python3.10 python3.10-venv python3.10-distutil \
+ python3.8 python3.8-venv python3.8-distutil \
  && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Install utilities
@@ -43,6 +46,9 @@ RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygi
  && curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz" \
  && tar xf lazygit.tar.gz lazygit \
  && install lazygit /usr/local/bin
+
+# UV Python Package Manager
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Model Dependencies
 
