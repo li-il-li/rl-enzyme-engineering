@@ -21,8 +21,10 @@ dependencies = [
     "seaborn>=0.13.2",
     "sequence-models",
     "supersuit>=3.9.3",
+    "tensorboard>=2.18.0",
     "tianshou<1.0.0",
     "torch-geometric<2.5.0",
+    "torch-tb-profiler>=0.4.3",
     "torch<2.3.0",
     "transformers<5.0.0",
 ]

@@ -1165,9 +1165,11 @@ dependencies = [
     { name = "seaborn" },
     { name = "sequence-models" },
     { name = "supersuit" },
+    { name = "tensorboard" },
     { name = "tianshou" },
     { name = "torch" },
     { name = "torch-geometric" },
+    { name = "torch-tb-profiler" },
     { name = "transformers" },
 ]
 
@@ -1189,9 +1191,11 @@ requires-dist = [
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "sequence-models", git = "https://github.com/microsoft/protein-sequence-models.git" },
     { name = "supersuit", specifier = ">=3.9.3" },
+    { name = "tensorboard", specifier = ">=2.18.0" },
     { name = "tianshou", specifier = "<1.0.0" },
     { name = "torch", specifier = "<2.3.0" },
     { name = "torch-geometric", specifier = "<2.5.0" },
+    { name = "torch-tb-profiler", specifier = ">=0.4.3" },
     { name = "transformers", specifier = "<5.0.0" },
 ]
 
@@ -1583,6 +1587,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e6/6e/a596e2ddecc3b13a0d576495369a30309fb54c74fadf0bbca645bfbcaa2f/torch_geometric-2.4.0.tar.gz", hash = "sha256:343c6906d0678f16553c2d02b7267d0ec77eafb5b44324070ebcf7da8a934557", size = 689471 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/65/4e/6f9a75548a93fedcd4514ae2de9bee1e91bade6b73252b4da32f0e42ac52/torch_geometric-2.4.0-py3-none-any.whl", hash = "sha256:9d8eb5eec44382f4072aa5e835450f144e9edb9d164627e532e311880b6bdad0", size = 1033784 },
+]
+
+[[package]]
+name = "torch-tb-profiler"
+version = "0.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pandas" },
+    { name = "tensorboard" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/96/3f/1bdbeae21db91179c295bcecb7194d57cd0e184125c69e5a6e315ea4770f/torch_tb_profiler-0.4.3.tar.gz", hash = "sha256:8b8d29b2de960b3c4423087b23cec29beaf9ac3a8c7b046c18fd25b218f726b1", size = 1057029 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/46/d0/891ec43349f287ea5c313ebc1320e4eda38ccd4c7a0951657213467eaab5/torch_tb_profiler-0.4.3-py3-none-any.whl", hash = "sha256:207a49b05572dd983e4ab29eb5e0fcadd60374a8f93c78ec638217e8d18788dc", size = 1053410 },
 ]
 
 [[package]]
