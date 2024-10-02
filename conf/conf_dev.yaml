@@ -1,64 +1,34 @@
 experiment:
   wildtype_AA_seq: "MSTETLRLQKARATEEGLAFETPGGLTRALRDGCFLLAVPPGFDTTPGVTLCREFFRPVEQGGESTRAYRGFRDLDGVYFDREHFQTEHVLIDGPGRERHFPPELRRMAEHMHELARHVLRTVLTELGVARELWSEVTGGAVDGRGTEWFAANHYRSERDRLGCAPHKDTGFVTVLYIEEGGLEAATGGSWTPVDPVPGCFVVNFGGAFELLTSGLDRPVRALLHRVRQCAPRPESADRFSFAAFVNPPPTGDLYRVGADGTATVARSTEDFLRDFNERTWGDGYADFGIAPPEPAGVAEDGVRA"
-  #ligand_smile: "COc1cc(C2OCC3C(c4cc(OC)c(O)cc4)OCC23)ccc1O"
   ligand_smile: "CCCc1ccc(O)c(OC)c1"
   device: "cuda"
-agents:
-  picker:
-    self_determination: 1 
-  # Reward:
-  max_cluster_size_ratio: 0.1
-  large_cluster_penalty: 0.5
-  edit_penalty: 0.01
-  no_edit_penalty: 100.0
-  binding_affinity_weight: 1 #10
-  clustering_score_k: 2
-  #
-  binding_affinity_k: 10
-  sequence_edit_target_ratio: 0.05
-  sequence_edit_target_ratio_penalty_k: 2000
-  clustering_weight: 0.5
-  temperature: 0.5
+on_policy_trainer:
   epochs: 1000000 
-  steps_per_epoch: 20
-  steps_per_collect: 100
   batch_size: 100
+  steps_per_epoch: 20
   repeat_per_collect: 1
-  ppo:
-    eps: 0.2 # 0.2
-    value_clip: False # True
-    advantage_normalization: True
-    recompute_advantage: False
-    reward_normalization: False # True
-    vf_coef: 0.5
-    ent_coef: 0.1 # 0.01 -> 0.1
-    max_grad_norm: 0.5
-    gae_lambda: 0.95
-    discount_factor: 0.99
+  steps_per_collect: 100
   replayBuffer:
     total_size: 10000
-  adam:
-    learning_rate: 0.0001 #1e-4
-    epsilon: 1e-5
-evodiff:
-  model_size_parameters: 640
-  mutations: 5
-alphaflow:
-  ckpt: "/root/projects/rl-enzyme-engineering/ckpts/AlphaFlow/esmflow_md_distilled_202402.pt"
-  samples: 1
-  noisy_first: True
-  no_diffusion: True
-  self_cond: False
-  tmax: 0.1
-  steps: 10
-fabind:
-  ckpt: "/root/projects/rl-enzyme-engineering/ckpts/FABind/FABind_plus/fabind_plus_best_ckpt.bin"
-  seed: 244
-  batch_size: 8
-  sample_size: 10
-  post_optim: True
-dsmbind:
-  ckpt: "fasdf"
+agents:
+  picker_ppo:
+    gumbel_dist_temperature: 0.5 # Missing in gumbal softmax
+    policy:
+      eps: 0.2 # 0.2
+      value_clip: False # True
+      advantage_normalization: True
+      recompute_advantage: False
+      vf_coef: 0.5
+      ent_coef: 0.1 # 0.01 -> 0.1
+      gae_lambda: 0.95
+      discount_factor: 0.99
+      reward_normalization: False # Keep 'False'!
+    adam:
+      learning_rate: 0.0001 #1e-4
+      epsilon: 1e-5
+  filler_plm:
+    self_determination: 1 
+    evodiff_model_size_parameters: 640
 hydra:
   run:
     dir: ../experiments/${now:%Y-%m-%d}/${now:%H-%M-%S}

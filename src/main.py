@@ -42,6 +42,9 @@ from crossattention_graph_net import CustomGraphNet
 logger = logging.getLogger(__name__)
 
 class GumbelSoftmaxDistribution(Distribution):
+    
+    arg_constraints = {}
+
     def __init__(self, logits, temperature=1.0):
         super().__init__()
         self.logits = logits
@@ -88,13 +91,13 @@ def main(cfg: DictConfig):
     
     tb_logger.write("config", 0, {"seed": seed})
     
-    logger.info(f"Steps per episode: {cfg.agents.steps_per_epoch}")
+    logger.info(f"Steps per episode: {cfg.on_policy_trainer.steps_per_epoch}")
 
     env = protein_ligand_gym_v0.env(
         render_mode="human",
         wildtype_aa_seq=cfg.experiment.wildtype_AA_seq,
         ligand_smile=cfg.experiment.ligand_smile,
-        max_steps=cfg.agents.steps_per_epoch,
+        max_steps=cfg.on_policy_trainer.steps_per_epoch,
         device=device,
         config=cfg,
     )
@@ -126,7 +129,7 @@ def main(cfg: DictConfig):
     critic.last.apply(critic_init)
 
     optim = torch.optim.Adam(
-        ActorCritic(actor, critic).parameters(), lr=cfg.agents.adam.learning_rate, eps=cfg.agents.adam.epsilon
+        ActorCritic(actor, critic).parameters(), lr=cfg.agents.picker_ppo.adam.learning_rate, eps=cfg.agents.picker_ppo.adam.epsilon
     )
     
     def gumbel_dist(logits: torch.Tensor) -> Distribution:
@@ -139,17 +142,17 @@ def main(cfg: DictConfig):
         optim=optim,
         dist_fn=gumbel_dist,
         action_space=env.action_space,
-        eps_clip=cfg.agents.ppo.eps,
+        eps_clip=cfg.agents.picker_ppo.policy.eps,
         dual_clip=None,
-        value_clip=cfg.agents.ppo.value_clip,
-        advantage_normalization=cfg.agents.ppo.advantage_normalization,
-        recompute_advantage=cfg.agents.ppo.recompute_advantage,
-        vf_coef=cfg.agents.ppo.vf_coef,
-        ent_coef=cfg.agents.ppo.ent_coef,
-        max_grad_norm= None, #cfg.agents.ppo.max_grad_norm,
-        gae_lambda=cfg.agents.ppo.gae_lambda,
-        discount_factor=cfg.agents.ppo.discount_factor,
-        reward_normalization=cfg.agents.ppo.reward_normalization, # 5.1 Value Normalization
+        value_clip=cfg.agents.picker_ppo.policy.value_clip,
+        advantage_normalization=cfg.agents.picker_ppo.policy.advantage_normalization,
+        recompute_advantage=cfg.agents.picker_ppo.policy.recompute_advantage,
+        vf_coef=cfg.agents.picker_ppo.policy.vf_coef,
+        ent_coef=cfg.agents.picker_ppo.policy.ent_coef,
+        max_grad_norm= None, # Don't change!
+        gae_lambda=cfg.agents.picker_ppo.policy.gae_lambda,
+        discount_factor=cfg.agents.picker_ppo.policy.discount_factor,
+        reward_normalization=cfg.agents.picker_ppo.policy.reward_normalization, # 5.1 Value Normalization
         deterministic_eval=False,
         observation_space=env.observation_space['protein_ligand_conformation_latent'],
         action_scaling=False,
@@ -157,7 +160,7 @@ def main(cfg: DictConfig):
     ).to(device)
     
     buffer = VectorReplayBuffer(
-        total_size=cfg.agents.replayBuffer.total_size,
+        total_size=cfg.on_policy_trainer.replayBuffer.total_size,
         buffer_num=1,
         ignore_obs_next=True,
         save_only_last_obs=False,
@@ -168,7 +171,7 @@ def main(cfg: DictConfig):
         [
             ppo_policy,
             ProteinSequencePolicy(
-                model_size_parameters = cfg.evodiff.model_size_parameters,
+                model_size_parameters = cfg.agents.filler_plm.evodiff_model_size_parameters,
                 sequence_encoder=seq_encoder,
                 action_space=env.action_space,
                 device=device
@@ -205,16 +208,16 @@ def main(cfg: DictConfig):
     
     result = OnpolicyTrainer(
         policy=policy,
-        max_epoch=cfg.agents.epochs,
-        batch_size=cfg.agents.batch_size,
+        max_epoch=cfg.on_policy_trainer.epochs,
+        batch_size=cfg.on_policy_trainer.batch_size,
         train_collector=collector,
         test_collector=None,
         buffer=None,
-        step_per_epoch=cfg.agents.steps_per_epoch,
-        repeat_per_collect=cfg.agents.repeat_per_collect,
+        step_per_epoch=cfg.on_policy_trainer.steps_per_epoch,
+        repeat_per_collect=cfg.on_policy_trainer.repeat_per_collect,
         episode_per_test=0,
         update_per_step=1.0,
-        step_per_collect=cfg.agents.steps_per_collect * 2, # TODO find out why this factor is necessary
+        step_per_collect=cfg.on_policy_trainer.steps_per_collect * 2, # TODO find out why this factor is necessary
         episode_per_collect=None,
         train_fn=None,
         test_fn=None,
