@@ -2,7 +2,7 @@ notes/
 data/
 ckpts/
 experiments/
-env310/
+.venv
 .DS_Store
 __pycache__/
 src/EnzymeGym/__pycache__

@@ -1,0 +1,32 @@
+[project]
+name = "rl-enzyme-engineering"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "biopython>=1.84",
+    "evodiff",
+    "fair-esm>=2.0.0",
+    "gymnasium>=0.29.1",
+    "hydra-core==1.3.2",
+    "matplotlib>=3.9.2",
+    "numba>=0.54",
+    "numpy<2.0.0",
+    "pandas<2.0",
+    "pettingzoo>=1.24.3",
+    "pysmiles<2.0.0",
+    "scikit-learn>=1.5.2",
+    "scipy>=1.14.1",
+    "seaborn>=0.13.2",
+    "sequence-models",
+    "supersuit>=3.9.3",
+    "tianshou<1.0.0",
+    "torch-geometric<2.5.0",
+    "torch<2.3.0",
+    "transformers<5.0.0",
+]
+
+[tool.uv.sources]
+evodiff = { git = "https://github.com/microsoft/evodiff.git" }
+sequence-models = { git = "https://github.com/microsoft/protein-sequence-models.git" }

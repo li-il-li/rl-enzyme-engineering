@@ -10,12 +10,6 @@ import functools
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
-# AlphaFlow
-from ProteinLigandGym.env.alphaflow_inference import init_esmflow, generate_conformation_ensemble
-# FABind+
-from fabind_plus_inference import init_fabind, prepare_ligand, create_FABindPipelineDataset, dock_proteins_ligand
-# DSMBind
-from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
 # BIND
 from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder
 
@@ -87,10 +81,10 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.config = config
 
         log.debug(f"Preparing Ligand: {ligand_smile}")
+
         # Ligand
         self.ligand_dict = {}
         self.ligand_dict['smile'] = ligand_smile
-        self.ligand_dict['mol_structure'], self.ligand_dict['mol_features'] = prepare_ligand(ligand_smile)
 
         # Tracker
         self.tracker = TopSequencesTracker()
@@ -112,14 +106,6 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.get_crossattention4_inputs
         ) = init_BIND(device) # still small model
 
-        # Structure based models
-        #log.info("Loading folding model ...")
-        #self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
-        #log.info("Loading docking model ...")
-        #self.docking_model, self.structure_tokenizer, self.structure_alphabet = init_fabind(device=device)
-        #log.info("Loading binding affinity prediction model ...")
-        #self.ba_model_struct = init_DSMBind(device=device)
-        
         # PettingZoo Env
         self.timestep = None
         self.max_steps = max_steps
@@ -148,7 +134,7 @@ class ProteinLigandInteractionEnv(AECEnv):
                     "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32),
                     "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
                     "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
-                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=np.bool),
+                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=bool),
                     "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[26, 64], dtype=np.float32),
                     "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 52], dtype=np.int64),
                     "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[52, 2], dtype=np.float32),
@@ -162,7 +148,7 @@ class ProteinLigandInteractionEnv(AECEnv):
                     "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32),
                     "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
                     "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
-                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=np.bool),
+                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=bool),
                     "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[26, 64], dtype=np.float32),
                     "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 52], dtype=np.int64),
                     "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[52, 2], dtype=np.float32),
@@ -241,23 +227,6 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.mutant_aa_seq = self.decode_aa_sequence(action)
             log.debug(f"Action sequence: {self.mutant_aa_seq}")
             
-
-            #log.info("Generate conformations ...")
-            #conformation_structures, pdb_files = generate_conformation_ensemble(self.folding_model,
-            #                                                         self.config,
-            #                                                         [self.mutant_aa_seq])
-            #self.conformation_structures = conformation_structures
-            #
-            #log.info("Dock Proteins to ligand ...")
-            #fabind_dataset = create_FABindPipelineDataset(conformation_structures,
-            #                                              self.ligand_dict,
-            #                                              self.structure_tokenizer,
-            #                                              self.structure_alphabet)
-            #protein_ligand_conformations_mols = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
-            #
-            #ba_struct = self.ba_model_struct.virtual_screen(pdb_files[0], protein_ligand_conformations_mols)
-            #self.binding_affinity_struct = ba_struct[0][1].cpu().item()
-            
             score = predict_binder(self.ba_model, self.esm_model, self.esm_tokeniser, self.device,
                                    [self.mutant_aa_seq], self.ligand_dict['smile'])
             
@@ -304,21 +273,6 @@ class ProteinLigandInteractionEnv(AECEnv):
                 self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
 
             self.render()
-
-
-
-        # Check termination conditions
-        # Check model properties (if folding prop is too low)
-        
-        # If uncommented skips actuall mutation
-        # if self.mask_penalty >= (1 * self.config.agents.binding_affinity_k):
-        #     self.rewards = {
-        #         "mutation_site_picker": np.random.randint(0, self.config.agents.binding_affinity_k) - self.mask_penalty,
-        #         "mutation_site_filler": np.random.randint(0, self.config.agents.binding_affinity_k) - self.mask_penalty 
-        #     }
-        #     self.terminations = { "mutation_site_picker": True, "mutation_site_filler": True}
-        #     self._accumulate_rewards()
-        #     self.render()
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
@@ -462,13 +416,11 @@ Num of Edites:          {self.num_edits}
     
     def _calculate_reward(self,mask):
         affinity_reward = (1.0 - float(self.binding_affinity))
-        #mask_penalty = self._calculate_mask_penalty(mask)
         clustering_reward = self._calculate_clustering_reward(mask)
         
         total_reward = (
             affinity_reward
             + self.config.agents.clustering_weight * clustering_reward
-            #- mask_penalty
         )
         
         return total_reward
