@@ -307,7 +307,21 @@ Reward:                 {self.rewards[self.agent_selection]}
         or any other environment data which should not be kept around after the
         user is no longer using the environment.
         """
-        pass
+
+        # Stop TopSequenceTracker thread
+        if hasattr(self, 'tracker'):
+            self.tracker.save_queue.put(None)
+            self.tracker.save_thread.join()
+            
+        # Clear any large data structures
+        self.ba_model = None
+        self.esm_model = None
+        self.esm_tokeniser = None
+        
+        if self.device == 'cuda':
+            torch.cuda.empty_cache()
+            
+        log.info("Environment closed and resources released.")
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):

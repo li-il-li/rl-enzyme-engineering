@@ -9,6 +9,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API")
 warnings.filterwarnings("ignore", message="`clean_up_tokenization_spaces` was not set")
 
+import signal
 import random
 import pickle
 import warnings
@@ -83,6 +84,23 @@ def main(cfg: DictConfig):
     device = cfg.experiment.device
 
     logger.debug("Loading PettingZoo environment...")
+
+    # Signal Handler
+    def signal_handler(signum, frame):
+        if 'env' in locals():
+            logger.info("Closing environment...")
+            env.close()
+        if 'write' in locals():
+            logger.info("Closing tensorboard writer...")
+            writer.close() # Tensorboard writer
+        if device == 'cuda':
+            logger.info("Clearing CUDA cache...")
+            torch.cuda.empty_cache()
+        logger.info("Exiting...")
+        sys.exit(0)
+            
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # Set Seed
     seed = random.randint(0, 2**32 - 1)

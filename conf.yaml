@@ -31,7 +31,7 @@ agents:
     evodiff_model_size_parameters: 640
 hydra:
   run:
-    dir: ../experiments/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ./experiments/${now:%Y-%m-%d}/${now:%H-%M-%S}
   job:
     chdir: True
   verbose: False
