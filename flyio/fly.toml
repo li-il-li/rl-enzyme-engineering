@@ -21,7 +21,6 @@ primary_region = 'ord'
   internal_port = 2222
   auto_stop_machines = true
   auto_start_machines = true
-
 [[services.ports]]
     port = 22
 

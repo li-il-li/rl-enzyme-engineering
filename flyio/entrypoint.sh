@@ -1,9 +1,14 @@
 #!/bin/bash -e
+
+# SSH
 echo $AUTHORIZED_KEYS > /root/.ssh/authorized_keys
+
+# Git
 git config --global credential.helper '!f() { sleep 1; echo "username=${GIT_USER}"; echo "password=${GIT_PASSWORD}"; }; f'
 git config --global user.name "$GIT_NAME"
 git config --global user.email "$GIT_EMAIL"
 
+# Make variables available for logged in user
 {
 echo "export GIT_USER=$GIT_USER"
 echo "export GIT_PASSWORD=$GIT_PASSWORD"
@@ -28,4 +33,5 @@ echo "export TORCH_HOME=$PROJECT_DIR" >> /root/.bashrc
 /usr/sbin/sshd
 exec "$@"
 
+# Keep container running after startup
 tail -f /dev/null

@@ -43,10 +43,10 @@ RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygi
  && tar xf lazygit.tar.gz lazygit \
  && install lazygit /usr/local/bin
 
-## uv 
+# UV Python Package Manager
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Init
-COPY --chmod=0755 ./entrypoint.sh ./entrypoint.sh
+COPY --chmod=0755 ./entrypoint.sh
 
 CMD ["/bin/bash", "-c", "./entrypoint.sh"]
