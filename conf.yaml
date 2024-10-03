@@ -1,0 +1,37 @@
+experiment:
+  wildtype_AA_seq: "MSTETLRLQKARATEEGLAFETPGGLTRALRDGCFLLAVPPGFDTTPGVTLCREFFRPVEQGGESTRAYRGFRDLDGVYFDREHFQTEHVLIDGPGRERHFPPELRRMAEHMHELARHVLRTVLTELGVARELWSEVTGGAVDGRGTEWFAANHYRSERDRLGCAPHKDTGFVTVLYIEEGGLEAATGGSWTPVDPVPGCFVVNFGGAFELLTSGLDRPVRALLHRVRQCAPRPESADRFSFAAFVNPPPTGDLYRVGADGTATVARSTEDFLRDFNERTWGDGYADFGIAPPEPAGVAEDGVRA"
+  ligand_smile: "CCCc1ccc(O)c(OC)c1"
+  device: "cuda"
+on_policy_trainer:
+  epochs: 1000000 
+  batch_size: 100
+  steps_per_epoch: 20
+  repeat_per_collect: 1
+  steps_per_collect: 100
+  replayBuffer:
+    total_size: 10000
+agents:
+  picker_ppo:
+    gumbel_dist_temperature: 0.5 # Missing in gumbal softmax
+    policy:
+      eps: 0.2 # 0.2
+      value_clip: False # True
+      advantage_normalization: True
+      recompute_advantage: False
+      vf_coef: 0.5
+      ent_coef: 0.1 # 0.01 -> 0.1
+      gae_lambda: 0.95
+      discount_factor: 0.99
+      reward_normalization: False # Keep 'False'!
+    adam:
+      learning_rate: 0.0001 #1e-4
+      epsilon: 1e-5
+  filler_plm:
+    self_determination: 1 
+    evodiff_model_size_parameters: 640
+hydra:
+  run:
+    dir: ../experiments/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: True
+  verbose: False

@@ -10,12 +10,6 @@ import functools
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
-# AlphaFlow
-from ProteinLigandGym.env.alphaflow_inference import init_esmflow, generate_conformation_ensemble
-# FABind+
-from fabind_plus_inference import init_fabind, prepare_ligand, create_FABindPipelineDataset, dock_proteins_ligand
-# DSMBind
-from dsmbind_inference import init_DSMBind, DrugAllAtomEnergyModel
 # BIND
 from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder
 
@@ -87,10 +81,10 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.config = config
 
         log.debug(f"Preparing Ligand: {ligand_smile}")
+
         # Ligand
         self.ligand_dict = {}
         self.ligand_dict['smile'] = ligand_smile
-        self.ligand_dict['mol_structure'], self.ligand_dict['mol_features'] = prepare_ligand(ligand_smile)
 
         # Tracker
         self.tracker = TopSequencesTracker()
@@ -112,14 +106,6 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.get_crossattention4_inputs
         ) = init_BIND(device) # still small model
 
-        # Structure based models
-        #log.info("Loading folding model ...")
-        #self.folding_model = init_esmflow(ckpt = config.alphaflow.ckpt, device=device)
-        #log.info("Loading docking model ...")
-        #self.docking_model, self.structure_tokenizer, self.structure_alphabet = init_fabind(device=device)
-        #log.info("Loading binding affinity prediction model ...")
-        #self.ba_model_struct = init_DSMBind(device=device)
-        
         # PettingZoo Env
         self.timestep = None
         self.max_steps = max_steps
@@ -148,7 +134,7 @@ class ProteinLigandInteractionEnv(AECEnv):
                     "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32),
                     "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
                     "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
-                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=np.bool),
+                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=bool),
                     "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[26, 64], dtype=np.float32),
                     "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 52], dtype=np.int64),
                     "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[52, 2], dtype=np.float32),
@@ -162,7 +148,7 @@ class ProteinLigandInteractionEnv(AECEnv):
                     "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32),
                     "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
                     "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
-                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=np.bool),
+                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=bool),
                     "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[26, 64], dtype=np.float32),
                     "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 52], dtype=np.int64),
                     "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[52, 2], dtype=np.float32),
@@ -182,8 +168,6 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.mask_penalty = 0 # remove
         self.binding_reward = 0
         self.clustering_score = 0
-        self.large_cluster_penalty = 0
-        self.edit_penalty_score = 0
         self.num_edits = 0
 
         self._cumulative_rewards = {agent: 0 for agent in self.agents}
@@ -241,23 +225,6 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.mutant_aa_seq = self.decode_aa_sequence(action)
             log.debug(f"Action sequence: {self.mutant_aa_seq}")
             
-
-            #log.info("Generate conformations ...")
-            #conformation_structures, pdb_files = generate_conformation_ensemble(self.folding_model,
-            #                                                         self.config,
-            #                                                         [self.mutant_aa_seq])
-            #self.conformation_structures = conformation_structures
-            #
-            #log.info("Dock Proteins to ligand ...")
-            #fabind_dataset = create_FABindPipelineDataset(conformation_structures,
-            #                                              self.ligand_dict,
-            #                                              self.structure_tokenizer,
-            #                                              self.structure_alphabet)
-            #protein_ligand_conformations_mols = dock_proteins_ligand(fabind_dataset, self.docking_model, self.device)
-            #
-            #ba_struct = self.ba_model_struct.virtual_screen(pdb_files[0], protein_ligand_conformations_mols)
-            #self.binding_affinity_struct = ba_struct[0][1].cpu().item()
-            
             score = predict_binder(self.ba_model, self.esm_model, self.esm_tokeniser, self.device,
                                    [self.mutant_aa_seq], self.ligand_dict['smile'])
             
@@ -277,17 +244,10 @@ class ProteinLigandInteractionEnv(AECEnv):
             aa_seq_encoded = self.encode_aa_sequence(self.mutant_aa_seq).astype(np.float32).reshape(1,-1)
             self.protein_ligand_protein_sequence = np.concatenate((self.protein_ligand_conformation_latent, aa_seq_encoded),axis=1)
 
-            (
-                reward,
-                self.binding_reward,
-                self.clustering_score,
-                self.large_cluster_penalty,
-                self.edit_penalty_score,
-                self.num_edits
-            ) = self._calculate_comprehensive_reward(self.mutation_site)
+            self.binding_reward = self._calculate_binding_reward()
             self.rewards = {
-                "mutation_site_picker": self.binding_reward, #self.binding_affinity_struct, #, #reward,
-                "mutation_site_filler": self.binding_reward #self.binding_affinity_struct #self.binding_reward #reward
+                "mutation_site_picker": self.binding_reward,
+                "mutation_site_filler": self.binding_reward
             }
 
             self.tracker.add_sequence(self.mutant_aa_seq, self.binding_reward, 0)
@@ -304,21 +264,6 @@ class ProteinLigandInteractionEnv(AECEnv):
                 self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
 
             self.render()
-
-
-
-        # Check termination conditions
-        # Check model properties (if folding prop is too low)
-        
-        # If uncommented skips actuall mutation
-        # if self.mask_penalty >= (1 * self.config.agents.binding_affinity_k):
-        #     self.rewards = {
-        #         "mutation_site_picker": np.random.randint(0, self.config.agents.binding_affinity_k) - self.mask_penalty,
-        #         "mutation_site_filler": np.random.randint(0, self.config.agents.binding_affinity_k) - self.mask_penalty 
-        #     }
-        #     self.terminations = { "mutation_site_picker": True, "mutation_site_filler": True}
-        #     self._accumulate_rewards()
-        #     self.render()
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
@@ -347,13 +292,6 @@ class ProteinLigandInteractionEnv(AECEnv):
 
 Step:                   {self.timestep}
 Reward:                 {self.rewards[self.agent_selection]}  
-
-Binding Reward:         {self.binding_reward}
-Clustering Score:       {self.clustering_score}
-Large Cluster Penalty:  {self.large_cluster_penalty}
-Edit Penalty Score:     {self.edit_penalty_score}
-
-Num of Edites:          {self.num_edits}
 
 {mask}
 {sequence}
@@ -445,8 +383,9 @@ Num of Edites:          {self.num_edits}
         masked_string = ''.join(char_array)
         return masked_string
     
+    # Create bigger holes in sequence at location -> more control for pLM
     def _expand_mutation_site(self,action):
-        hole_size=self.config.agents.picker.self_determination 
+        hole_size=self.config.agents.filler_plm.self_determination 
         # Find the index of the 1 in the action vector
         one_index = np.where(action == 1)[0][0]
         
@@ -459,85 +398,7 @@ Num of Edites:          {self.num_edits}
         expanded_action[start:end] = 1
         
         return expanded_action
-    
-    def _calculate_reward(self,mask):
-        affinity_reward = (1.0 - float(self.binding_affinity))
-        #mask_penalty = self._calculate_mask_penalty(mask)
-        clustering_reward = self._calculate_clustering_reward(mask)
-        
-        total_reward = (
-            affinity_reward
-            + self.config.agents.clustering_weight * clustering_reward
-            #- mask_penalty
-        )
-        
-        return total_reward
-    
-    def _calculate_clustering_reward(self,mask):
-        runs = np.diff(np.where(np.concatenate(([mask[0]], mask[:-1] != mask[1:], [True])))[0])
-        masked_runs = runs[mask[:-1] == 1]
-        if len(masked_runs) == 0:
-            return 0
-        
-        avg_cluster_size = np.mean(masked_runs)
-        num_clusters = len(masked_runs)
-        
-        # Reward larger clusters and fewer clusters
-        clustering_score = avg_cluster_size / (num_clusters + 1)  # Adding 1 to avoid division by zero
-        return clustering_score
-    
-    def _calculate_mask_penalty(self, mask):
-        threshold = self.config.agents.sequence_edit_target_ratio
-        k = self.config.agents.sequence_edit_target_ratio_penalty_k
-        ratio = np.mean(mask)
-        if ratio == 0:
-            return 100
-        else:
-            return k * (ratio - threshold)**3
-    
-    def _calculate_comprehensive_reward(self,mask):
-        # Config
-        max_cluster_size_ratio = self.config.agents.max_cluster_size_ratio
-        large_cluster_penalty=self.config.agents.large_cluster_penalty
-        edit_penalty=self.config.agents.edit_penalty
-        no_edit_penalty=self.config.agents.no_edit_penalty
-        binding_affinity_weight=self.config.agents.binding_affinity_weight
-        clustering_score_k = self.config.agents.clustering_score_k
-        
-        sequence_length = len(mask)
-        num_edits = np.sum(mask)
-        max_cluster_size = int(max_cluster_size_ratio * sequence_length)
 
-        # Early return if no edits
-        if num_edits == 0:
-            return -no_edit_penalty
-
-        # Binding affinity reward (assuming lower is better)
-        binding_reward = binding_affinity_weight * (1.0 - float(self.binding_affinity))
-
-        # Cluster calculation
-        changes = np.diff(np.concatenate(([0], mask, [0])))
-        starts = np.where(changes == 1)[0]
-        ends = np.where(changes == -1)[0]
-        masked_runs = ends - starts
-
-        if len(masked_runs) > 0:
-            avg_cluster_size = np.mean(masked_runs)
-            num_clusters = len(masked_runs)
-            
-            # Basic clustering score
-            clustering_score = clustering_score_k *  (avg_cluster_size / (num_clusters + 1))
-            
-            # Penalty for clusters larger than max_cluster_size
-            large_cluster_penalty = sum(max(0, run - max_cluster_size) for run in masked_runs) * large_cluster_penalty
-        else:
-            clustering_score = 0
-            large_cluster_penalty = 0
-        
-        # Penalty for total number of edits
-        edit_penalty_score = edit_penalty * num_edits
-        
-        # Final reward
-        final_reward = binding_reward + clustering_score - large_cluster_penalty - edit_penalty_score
-        
-        return final_reward, binding_reward, clustering_score, large_cluster_penalty, edit_penalty_score, num_edits
+    def _calculate_binding_reward(self):
+        binding_reward = (1.0 - float(self.binding_affinity))
+        return binding_reward

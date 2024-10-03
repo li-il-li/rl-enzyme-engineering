@@ -2,7 +2,6 @@
     "recommendations": [
         "arianjamasb.protein-viewer",
         "ms-toolsai.jupyter",
-        "quarto.quarto",
         "ms-toolsai.tensorboard",
         "ms-python.python"
     ]

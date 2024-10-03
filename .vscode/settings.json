@@ -1,6 +1,10 @@
 {
-    "terminal.integrated.env.linux": {
-        "RCLONE_CONFIG": "/workspaces/rl-enzyme-engineering/rclone.conf"
+    "python.tensorBoard.logDirectory": "/root/projects/rl-enzyme-engineering/experiments",
+    "terminal.integrated.profiles.linux": {
+      "tmux-shell": {
+        "path": "tmux",
+        "args": ["new-session", "-A", "-s", "vscode:${workspaceFolder}"]
+      }
     },
-    "tensorBoard.logDirectory": "/root/projects/rl-enzyme-engineering/experiments"
+    "terminal.integrated.defaultProfile.linux": "tmux-shell"
 }
