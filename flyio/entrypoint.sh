@@ -10,6 +10,7 @@ git config --global user.email "$GIT_EMAIL"
 
 # Make variables available for logged in user
 {
+git config --global credential.helper store
 echo "export GIT_USER=$GIT_USER"
 echo "export GIT_PASSWORD=$GIT_PASSWORD"
 echo "export CUDA_HOME=/usr/local/cuda"
