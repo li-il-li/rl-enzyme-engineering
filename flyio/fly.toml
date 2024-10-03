@@ -1,23 +1,32 @@
-app = 'rl-enzyme'
+# fly.toml app configuration file generated for rl-enzyme-engineering on 2024-10-03T12:46:13+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'rl-enzyme-engineering'
 primary_region = 'ord'
 
 [build]
-  dockerfile = "Dockerfile.cuda"
+  dockerfile = 'Dockerfile.cuda'
+
+[[mounts]]
+  source = 'projects'
+  destination = '/root/projects'
+  initial_size = '20GB'
+  auto_extend_size_threshold = 80
+  auto_extend_size_increment = '5GB'
+
+[[services]]
+  protocol = 'tcp'
+  internal_port = 2222
+  auto_stop_machines = true
+  auto_start_machines = true
+
+[[services.ports]]
+    port = 22
 
 [[vm]]
   size = 'l40s'
-  
-[[mounts]]
-source = "projects"
-destination = "/root/projects"
-initial_size = "40GB"
-auto_extend_size_threshold = 80
-auto_extend_size_increment = "5GB"
-
-[[services]]
-  internal_port = 2222
-  protocol = "tcp"
-  auto_stop_machines = true
-  auto_start_machines = true
-  [[services.ports]]
-    port = 22
+  memory = '32gb'
+  cpu_kind = 'performance'
+  cpus = 8

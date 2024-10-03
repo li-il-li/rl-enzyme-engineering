@@ -12,6 +12,15 @@ echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/c
 echo "export PATH=$PATH:$CUDA_HOME/bin"
 } >> /root/.bashrc
 
+# Check if repo is already on disk and if not clone it
+REPO_URL="https://github.com/li-il-li/rl-enzyme-engineering.git"
+REPO_NAME=$(basename -s .git "$REPO_URL")
+if [ -d "/root/projects/$REPO_NAME" ]; then
+    echo "Repository already exists!"
+else
+    git clone "$REPO_URL" "/root/projects/$REPO_NAME"
+fi
+
 /usr/sbin/sshd
 exec "$@"
 
