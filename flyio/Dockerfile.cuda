@@ -5,7 +5,7 @@ RUN apt update -q && apt install -y ca-certificates wget && \
 
 
 FROM base as builder
-RUN apt install -y --no-install-recommends git cuda-nvcc-11-8
+RUN apt install -y --no-install-recommends git cuda-nvcc-12-3
 RUN git clone --depth=1 https://github.com/nvidia/cuda-samples.git /cuda-samples
 RUN cd /cuda-samples/Samples/1_Utilities/deviceQuery && \
     make && install -m 755 deviceQuery /usr/local/bin
@@ -15,7 +15,7 @@ FROM base as runtime
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install CUDA
-RUN apt install -y --no-install-recommends cuda-toolkit-11-8 \
+RUN apt install -y --no-install-recommends cuda-toolkit-12-3 \
  && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Setup SSH
@@ -46,20 +46,7 @@ RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygi
 ## uv 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Model Dependencies
-
-## FABind+
-### graph-tool
-RUN wget https://downloads.skewed.de/skewed-keyring/skewed-keyring_1.0_all_$(lsb_release -s -c).deb \
- && dpkg -i skewed-keyring_1.0_all_$(lsb_release -s -c).deb \
- && rm skewed-keyring_1.0_all_$(lsb_release -s -c).deb
-RUN echo "deb [signed-by=/usr/share/keyrings/skewed-keyring.gpg] https://downloads.skewed.de/apt $(lsb_release -s -c) main" > \
-    /etc/apt/sources.list.d/skewed.list
-RUN  apt-get update && apt-get install -y python3-graph-tool openbabel \
- && rm -rf /var/lib/apt/lists /var/cache/apt/archives
-
 # Init
-COPY --chmod=0755 ./init.py /root/init.py
 COPY --chmod=0755 ./entrypoint.sh ./entrypoint.sh
 
 CMD ["/bin/bash", "-c", "./entrypoint.sh"]
