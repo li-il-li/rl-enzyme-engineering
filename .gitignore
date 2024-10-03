@@ -6,3 +6,4 @@ experiments/
 .DS_Store
 __pycache__/
 src/EnzymeGym/__pycache__
+hub
