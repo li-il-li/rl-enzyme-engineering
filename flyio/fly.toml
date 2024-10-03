@@ -5,7 +5,7 @@ primary_region = 'ord'
   dockerfile = "Dockerfile.cuda"
 
 [[vm]]
-  size = 'a100-40gb'
+  size = 'l40s'
   
 [[mounts]]
 source = "projects"
