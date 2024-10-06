@@ -123,7 +123,6 @@ def main(cfg: DictConfig):
     env = PettingZooEnv(env)
     
     # Model PPO
-    state_shape = env.observation_space['protein_ligand_protein_sequence'].shape
     action_shape = env.action_space.shape
     net = CustomGraphNet(
         state_shape=env.observation_space,
@@ -172,7 +171,6 @@ def main(cfg: DictConfig):
         discount_factor=cfg.agents.picker_ppo.policy.discount_factor,
         reward_normalization=cfg.agents.picker_ppo.policy.reward_normalization, # 5.1 Value Normalization
         deterministic_eval=False,
-        observation_space=env.observation_space['protein_ligand_conformation_latent'],
         action_scaling=False,
         lr_scheduler=None,
     ).to(device)

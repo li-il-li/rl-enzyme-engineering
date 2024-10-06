@@ -57,7 +57,6 @@ class TopSequencesTracker:
         except FileNotFoundError:
             print(f"File {self.filename} not found. Starting with an empty list.")
 
-NUM_ITERS = 10
 log = logging.getLogger(__name__)
 
 class ProteinLigandInteractionEnv(AECEnv):
@@ -98,13 +97,11 @@ class ProteinLigandInteractionEnv(AECEnv):
         log.debug("Loading sequence based binding affinity model ...")
         (
             self.ba_model,
-            self.get_ba_activations,
-            self.latent_vector_size,
             self.esm_model,
             self.esm_tokeniser,
             self.get_conv5_inputs,
             self.get_crossattention4_inputs
-        ) = init_BIND(device) # still small model
+        ) = init_BIND(device)
 
         # PettingZoo Env
         self.timestep = None
@@ -130,8 +127,6 @@ class ProteinLigandInteractionEnv(AECEnv):
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
-                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32),
-                    "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32),
                     "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
                     "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
                     "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=bool),
@@ -144,8 +139,6 @@ class ProteinLigandInteractionEnv(AECEnv):
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
-                    "protein_ligand_conformation_latent": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size,), dtype=np.float32),
-                    "protein_ligand_protein_sequence": spaces.Box(low=-100.0, high=100.0, shape=(self.latent_vector_size + len(self.wildtype_aa_seq),), dtype=np.float32),
                     "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
                     "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
                     "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=bool),
@@ -176,8 +169,6 @@ class ProteinLigandInteractionEnv(AECEnv):
 
         self.mutant_aa_seq = self.wildtype_aa_seq
         self.mutation_site = np.zeros(len(self.mutant_aa_seq))
-        self.protein_ligand_conformation_latent = np.zeros((self.latent_vector_size), dtype=np.float32)
-        self.protein_ligand_protein_sequence = np.zeros((self.latent_vector_size + len(self.wildtype_aa_seq)), dtype=np.float32)
 
         crossattention4_graph_batch_space= self._observation_spaces["mutation_site_picker"]["bind_crossattention4_graph_batch"]
         self.crossattention4_graph_batch = np.zeros(crossattention4_graph_batch_space.shape, dtype=crossattention4_graph_batch_space.dtype)
@@ -228,10 +219,9 @@ class ProteinLigandInteractionEnv(AECEnv):
             score = predict_binder(self.ba_model, self.esm_model, self.esm_tokeniser, self.device,
                                    [self.mutant_aa_seq], self.ligand_dict['smile'])
             
-            # Here Sequence
+            # Get latent represetations of BIND
             self.binding_affinity = score[0]['non_binder_prob']
             (
-                self.protein_ligand_conformation_latent,
                 self.crossattention4_graph_batch,
                 self.crossattention4_hidden_states,
                 self.crossattention4_padding_mask,
@@ -240,10 +230,6 @@ class ProteinLigandInteractionEnv(AECEnv):
                 self.bind_conv5_e,
             ) = self._get_ba_model_activation()
             
-
-            aa_seq_encoded = self.encode_aa_sequence(self.mutant_aa_seq).astype(np.float32).reshape(1,-1)
-            self.protein_ligand_protein_sequence = np.concatenate((self.protein_ligand_conformation_latent, aa_seq_encoded),axis=1)
-
             self.binding_reward = self._calculate_binding_reward()
             self.rewards = {
                 "mutation_site_picker": self.binding_reward,
@@ -339,8 +325,6 @@ Reward:                 {self.rewards[self.agent_selection]}
                 "agent_id": self.agents[0],
                 "mutation_aa_seq": self.mutant_aa_seq,
                 "mutation_site": self.mutation_site,
-                "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
-                "protein_ligand_protein_sequence": self.protein_ligand_protein_sequence,
                 "bind_crossattention4_graph_batch": self.crossattention4_graph_batch,
                 "bind_crossattention4_hidden_states_30": self.crossattention4_hidden_states,
                 "bind_crossattention4_padding_mask": self.crossattention4_padding_mask,
@@ -353,8 +337,6 @@ Reward:                 {self.rewards[self.agent_selection]}
                 "agent_id": self.agents[1],
                 "mutation_aa_seq": self.mutant_aa_seq,
                 "mutation_site": self.mutation_site,
-                "protein_ligand_conformation_latent": self.protein_ligand_conformation_latent,
-                "protein_ligand_protein_sequence": self.protein_ligand_protein_sequence,
                 "bind_crossattention4_graph_batch": self.crossattention4_graph_batch,
                 "bind_crossattention4_hidden_states_30": self.crossattention4_hidden_states,
                 "bind_crossattention4_padding_mask": self.crossattention4_padding_mask,
@@ -376,10 +358,9 @@ Reward:                 {self.rewards[self.agent_selection]}
         }
     
     def _get_ba_model_activation(self):
-        dense = self.get_ba_activations()
         conv5_x, conv5_a, conv5_e = self.get_conv5_inputs()
         crossattention4_graph_batch, crossattention4_hidden_states_30, crossattention4_padding_mask = self.get_crossattention4_inputs()
-        return  dense, crossattention4_graph_batch, crossattention4_hidden_states_30, crossattention4_padding_mask, conv5_x, conv5_a, conv5_e
+        return  crossattention4_graph_batch, crossattention4_hidden_states_30, crossattention4_padding_mask, conv5_x, conv5_a, conv5_e
     
     def decode_aa_sequence(self,action):
         vocabulary = self.amino_acids_sequence_actions

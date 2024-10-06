@@ -64,17 +64,7 @@ def init_BIND(device):
     model.eval()
     model.to(device)
     
-    log.info(f"Model BIND: {model}")
-    
-    activation = None
-    def hook_fn(module, input, output):
-        nonlocal activation
-        activation = output.detach().cpu()
-
-    hook = model.dense2.register_forward_hook(hook_fn)
-
-    def get_activation():
-        return activation.numpy()
+    #log.info(f"Model BIND: {model}")
     
     crossattention4_graph_batch = None
     crossattention4_hidden_states_30 = None
@@ -106,7 +96,7 @@ def init_BIND(device):
     def get_conv5_inputs():
         return conv5_x, conv5_a, conv5_e
 
-    return model, get_activation, model.dense2.out_features, esm_model, esm_tokeniser, get_conv5_inputs, get_crossattention4_inputs
+    return model, esm_model, esm_tokeniser, get_conv5_inputs, get_crossattention4_inputs
 
 
 def get_graph(smiles):
