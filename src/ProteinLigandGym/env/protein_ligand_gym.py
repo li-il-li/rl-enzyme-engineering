@@ -11,7 +11,7 @@ from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
 # BIND
-from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder
+from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder, get_graph
 
 import heapq
 import json
@@ -102,9 +102,12 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.get_conv5_inputs,
             self.get_crossattention4_inputs
         ) = init_BIND(device)
+        
+        self.smile_graph = get_graph(self.config.experiment.ligand_smile)
 
         # PettingZoo Env
         self.timestep = None
+        self.total_timesteps = 0
         self.max_steps = max_steps
         self.possible_agents = ["mutation_site_picker", "mutation_site_filler"]
         self.agent_name_mapping = dict(
@@ -127,24 +130,24 @@ class ProteinLigandInteractionEnv(AECEnv):
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
-                    "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
-                    "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
-                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=bool),
-                    "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[26, 64], dtype=np.float32),
-                    "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 52], dtype=np.int64),
-                    "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[52, 2], dtype=np.float32),
+                    "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[self.smile_graph.x.size()[0]], dtype=np.int64), # Torch dtypes sadly unsupported
+                    "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, len(self.wildtype_aa_seq) + 2, 1280], dtype=np.float32),
+                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, len(self.wildtype_aa_seq) + 2], dtype=bool),
+                    "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[self.smile_graph.x.size()[0], 64], dtype=np.float32),
+                    "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[self.smile_graph.edge_index.size()[0],self.smile_graph.edge_index.size()[1]], dtype=np.int64),
+                    "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[self.smile_graph.edge_index.size()[1],self.smile_graph.edge_index.size()[0]], dtype=np.float32),
                 }
             ),
             "mutation_site_filler": spaces.Dict(
                 {
                     "mutation_aa_seq": spaces.Text(min_length=len(self.wildtype_aa_seq), max_length=len(self.wildtype_aa_seq)),
                     "mutation_site": spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq))),
-                    "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[26], dtype=np.int64), # Torch dtypes sadly unsupported
-                    "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, 307, 1280], dtype=np.float32),
-                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, 307], dtype=bool),
-                    "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[26, 64], dtype=np.float32),
-                    "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[2, 52], dtype=np.int64),
-                    "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[52, 2], dtype=np.float32),
+                    "bind_crossattention4_graph_batch": spaces.Box(low=-100.0, high=100.0, shape=[self.smile_graph.x.size()[0]], dtype=np.int64), # Torch dtypes sadly unsupported
+                    "bind_crossattention4_hidden_states_30": spaces.Box(low=-100.0, high=100.0, shape=[1, len(self.wildtype_aa_seq) + 2, 1280], dtype=np.float32),
+                    "bind_crossattention4_padding_mask": spaces.Box(low=0, high=1, shape=[1, len(self.wildtype_aa_seq) + 2], dtype=bool),
+                    "bind_conv5_x": spaces.Box(low=-100, high=100, shape=[self.smile_graph.x.size()[0], 64], dtype=np.float32),
+                    "bind_conv5_a": spaces.Box(low=-100, high=100, shape=[self.smile_graph.edge_index.size()[0],self.smile_graph.edge_index.size()[1]], dtype=np.int64),
+                    "bind_conv5_e": spaces.Box(low=-100, high=100, shape=[self.smile_graph.edge_index.size()[1],self.smile_graph.edge_index.size()[0]], dtype=np.float32),
                 }
             )
         }
@@ -245,11 +248,13 @@ class ProteinLigandInteractionEnv(AECEnv):
             self.truncations = { "mutation_site_picker": False, "mutation_site_filler": False}
 
             self.timestep += 1
+            self.total_timesteps += 1
 
             if self.timestep == self.max_steps:
                 self.truncations = { "mutation_site_picker": True, "mutation_site_filler": True }
 
-            self.render()
+            if (self.total_timesteps % self.config.experiment.render_timesteps == 0):
+                self.render()
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
