@@ -6,8 +6,8 @@ from transformers import logging, AutoModel, AutoTokenizer
 from torch_geometric.data import Batch
 import sys
 import logging
-from .models.BIND import loading
-from .models.BIND.data import BondType
+from BIND import loading
+from BIND.data import BondType
 from torch_geometric.utils.sparse import dense_to_sparse
 from torch_geometric.data import Data
 from tqdm import tqdm
