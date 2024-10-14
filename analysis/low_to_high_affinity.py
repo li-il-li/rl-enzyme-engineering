@@ -19,7 +19,7 @@ class ProteinLigandComplex:
         self.protein_AA_seq = self.__get_prot_AA_seq(self.pdb_id)
         self.ligand_smiles = self.__get_ligand_smiles(self.pdb_id)
 
-        self.non_binder_probability = self.__score_BIND(self.protein_AA_seq, self.ligand_smiles)
+        self.bind_score = self.__score_BIND(self.protein_AA_seq, self.ligand_smiles)
 
     def __str__(self):
         return f"""
@@ -52,9 +52,15 @@ class ProteinLigandComplex:
 
         return ligand_smiles
     
-    def __score_BIND(self, ):
-        # Add score function here        
-        print('Scoring')
+    def __score_BIND(self, prot_AA_seq, ligand_SMILES ):
+        scores = predict_binder(*self.bind_model, [prot_AA_seq], ligand_SMILES)[0]
+        return {
+            "pKi": scores["pKi"],
+            "pIC50": scores["pIC50"],
+            "pKd": scores["pKd"],
+            "pEC50": scores["pEC50"],
+            "non_binder_prob": scores["non_binder_prob"]
+        }
 
 
 # %%
@@ -71,16 +77,26 @@ validation_complexes_pdb_ids = [
     '2YMD', # Engineered Serotonin-Binding Protein engineered to recognize the agonist serotonin dpK 5.5
 ]
 
+# %%
+# Initialize BIND model
 device = 'cuda'
 ba_model, esm_model, esm_tokeniser , _, _ = init_BIND(device)
-
-
-# Create list with protein ligand complexes
-validation_protein_ligand_complexes = [ProteinLigandComplex(pdb_id, ba_model) for pdb_id in validation_complexes_pdb_ids] 
+bind_model = (ba_model, esm_model, esm_tokeniser, device)
 
 # %%
-for  protligcomp in validation_protein_ligand_complexes:
-    print(protligcomp)
+# Create list with protein ligand complexes
+validation_protein_ligand_complexes = [ProteinLigandComplex(pdb_id, bind_model) for pdb_id in validation_complexes_pdb_ids] 
+
+# %%
+for protligcomp in validation_protein_ligand_complexes:
+    print(protligcomp.pdb_id, protligcomp.bind_score['non_binder_prob'])
     
 # %%
-from ...src.ProteinLigandGym.env.bind_inference import predict_binder
+# Define: function with termination condition
+
+# Start execution
+# should return the directory of runtime
+
+# Load JSON
+
+# Do comparisson
