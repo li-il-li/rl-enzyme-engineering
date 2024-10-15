@@ -6,8 +6,12 @@ import sys
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models/BIND/")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env/models")
 sys.path.append("/root/projects/rl-enzyme-engineering/src/ProteinLigandGym/env")
-
+sys.path.append("/root/projects/rl-enzyme-engineering/src/")
 from bind_inference import init_BIND, predict_binder
+# import run function from algorithm
+from main import run
+from hydra import compose, initialize
+from omegaconf import OmegaConf
 
 # %%
 class ProteinLigandComplex:
@@ -91,6 +95,14 @@ validation_protein_ligand_complexes = [ProteinLigandComplex(pdb_id, bind_model) 
 for protligcomp in validation_protein_ligand_complexes:
     print(protligcomp.pdb_id, protligcomp.bind_score['non_binder_prob'])
     
+# %%
+# Load config
+with initialize(version_base=None, config_path="../"):
+    cfg = compose(config_name="conf")#, overrides=["db=mysql", "db.user=me"])
+    print(cfg['experiment']['wildtype_AA_seq'])
+# %%
+
+
 # %%
 # Define: function with termination condition
 

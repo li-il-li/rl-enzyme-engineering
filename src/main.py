@@ -73,8 +73,7 @@ class GumbelSoftmaxDistribution(Distribution):
         return -(F.softmax(self.logits, dim=-1) * F.log_softmax(self.logits, dim=-1)).sum(-1)
 
 
-@hydra.main(version_base=None, config_path="../", config_name='conf')
-def main(cfg: DictConfig):
+def run(cfg: DictConfig):
     
     # Logger
     log_path = os.path.join(os.getcwd(), 'rl-loop')
@@ -248,6 +247,10 @@ def main(cfg: DictConfig):
         test_in_train=True,
         save_fn=None,
     ).run()
+
+@hydra.main(version_base=None, config_path="../", config_name='conf')
+def main(cfg: DictConfig):
+    run(cfg)
 
 if __name__ == "__main__":
     main()
