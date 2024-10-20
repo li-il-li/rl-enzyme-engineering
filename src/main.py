@@ -220,6 +220,16 @@ def run(cfg: DictConfig):
         #with open(buffer_path, "wb") as f:
         #    pickle.dump(collector.buffer, f)
         return ckpt_path
+
+    def time_limit_reached(elapsed_time, limit_seconds):
+        return elapsed_time >= limit_seconds
+
+    start_time = time.time()
+    time_limit = cfg.experiment.time_limit_h * 60 * 60
+
+    def stop_fn(epoch, env_step):
+        elapsed_time = time.time() - start_time
+        return time_limit_reached(elapsed_time, time_limit)
     
     result = OnpolicyTrainer(
         policy=policy,
@@ -236,7 +246,7 @@ def run(cfg: DictConfig):
         episode_per_collect=None,
         train_fn=None,
         test_fn=None,
-        stop_fn=None,
+        stop_fn=stop_fn,
         save_best_fn=None,
         save_checkpoint_fn=save_checkpoint_fn,
         resume_from_log=False,

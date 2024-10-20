@@ -3,6 +3,7 @@ experiment:
   ligand_smile: "CCCc1ccc(O)c(OC)c1"
   device: "cuda"
   render_timesteps: 20
+  time_limit_h: 4
 on_policy_trainer:
   epochs: 1000000 
   batch_size: 100

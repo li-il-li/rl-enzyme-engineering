@@ -101,14 +101,19 @@ with initialize(version_base=None, config_path="../"):
     cfg = compose(config_name="conf")#, overrides=["db=mysql", "db.user=me"])
     print(cfg['experiment']['wildtype_AA_seq'])
 # %%
-
+validation_protein_ligand_complexes[0].protein_AA_seq
+# %%
+cfg['experiment']['wildtype_AA_seq'] = validation_protein_ligand_complexes[0].protein_AA_seq
+cfg['experiment']['ligand_smile'] = validation_protein_ligand_complexes[0].ligand_smiles
+cfg
 
 # %%
-# Define: function with termination condition
-
 # Start execution
 # should return the directory of runtime
+run(cfg)
 
+# %%
 # Load JSON
 
-# Do comparisson
+# %%
+# Switch to corruption
