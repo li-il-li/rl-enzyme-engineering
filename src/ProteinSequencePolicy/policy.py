@@ -1,4 +1,4 @@
-from tianshou.policy.base import BasePolicy
+from tianshou.policy.base import BasePolicy, TrainingStats
 from tianshou.data import Batch
 from evodiff.pretrained import OA_DM_38M, OA_DM_640M
 #from evodiff.conditional_generation import inpaint_simple
@@ -31,17 +31,14 @@ class ProteinSequencePolicy(BasePolicy):
 
     def forward(self, batch, state=None, model=None):
         """Compute action over the given batch data."""
-
-        n = len(batch.obs)  # number of states in the batch
+        n = len(batch.obs.obs)  # number of states in the batch
 
         #log.info(f"ProtSeqPolicy Batch Observation: {batch.obs}")
         #log.info(f"ProtSeqPolicy Batch: {batch}")
 
         log.debug(f"Sample sequence...")
-        mutant_sequence = batch.obs.mutation_aa_seq[0]
-        #log.info(f"Mutant sequence: {mutant_sequence}")
-        #log.info(f"Mutation Mask: {batch.obs.mutation_site[0]}")
-        mutation_mask = batch.obs.mutation_site[0]
+        mutant_sequence = batch.obs.obs.mutation_aa_seq[0]
+        mutation_mask = batch.obs.obs.mutation_site[0]
         indices = np.where(mutation_mask == 1)[0]
         #log.info(f"Indices: {indices}")
         
@@ -71,12 +68,13 @@ class ProteinSequencePolicy(BasePolicy):
     def learn(self, batch, **kwargs):
         """This is a random policy, so no learning is involved."""
         #log.info(f"Training ProteinSequencePolicy: {batch}")
-        return {
-            "loss": 1.0
-        }
+        
+        return TrainingStats(
+            train_time=1.5,
+            smoothed_loss={'loss1': 0.5, 'loss2': 0.3}
+        )
     
     def _init_evodiff(self, device, model_size):
-        # TODO change back to big model
         model, collater, tokenizer, scheme = OA_DM_640M() if model_size == 640 else OA_DM_38M()
         model.to(device)
 

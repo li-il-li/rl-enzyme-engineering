@@ -173,6 +173,9 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.mutant_aa_seq = self.wildtype_aa_seq
         self.mutation_site = np.zeros(len(self.mutant_aa_seq))
 
+        self._agent_selector = agent_selector(self.agents)
+        self.agent_selection = self._agent_selector.next()
+
         crossattention4_graph_batch_space= self._observation_spaces["mutation_site_picker"]["bind_crossattention4_graph_batch"]
         self.crossattention4_graph_batch = np.zeros(crossattention4_graph_batch_space.shape, dtype=crossattention4_graph_batch_space.dtype)
         crossattention4_hidden_states_space = self._observation_spaces["mutation_site_picker"]["bind_crossattention4_hidden_states_30"]
@@ -193,8 +196,6 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.observations = self._get_obs()
         self.infos = self._get_infos()
         
-        self._agent_selector = agent_selector(self.agents)
-        self.agent_selection = self._agent_selector.next()
 
         return self.observations, self.infos
 
@@ -322,33 +323,36 @@ Reward:                 {self.rewards[self.agent_selection]}
     def action_space(self, agent):
         return self._action_spaces[agent]
     
-    
     def _get_obs(self):
         
         return {
             "mutation_site_picker": {
                 "agent_id": self.agents[0],
-                "mutation_aa_seq": self.mutant_aa_seq,
-                "mutation_site": self.mutation_site,
-                "bind_crossattention4_graph_batch": self.crossattention4_graph_batch,
-                "bind_crossattention4_hidden_states_30": self.crossattention4_hidden_states,
-                "bind_crossattention4_padding_mask": self.crossattention4_padding_mask,
-                "bind_conv5_x": self.bind_conv5_x,
-                "bind_conv5_a": self.bind_conv5_a,
-                "bind_conv5_e": self.bind_conv5_e,
-                "mask": self.mask
+                "observation": {
+                    "mutation_aa_seq": self.mutant_aa_seq,
+                    "mutation_site": self.mutation_site,
+                    "bind_crossattention4_graph_batch": self.crossattention4_graph_batch,
+                    "bind_crossattention4_hidden_states_30": self.crossattention4_hidden_states,
+                    "bind_crossattention4_padding_mask": self.crossattention4_padding_mask,
+                    "bind_conv5_x": self.bind_conv5_x,
+                    "bind_conv5_a": self.bind_conv5_a,
+                    "bind_conv5_e": self.bind_conv5_e,
+                },
+                "action_mask": self.mask
             },
             "mutation_site_filler": {
                 "agent_id": self.agents[1],
-                "mutation_aa_seq": self.mutant_aa_seq,
-                "mutation_site": self.mutation_site,
-                "bind_crossattention4_graph_batch": self.crossattention4_graph_batch,
-                "bind_crossattention4_hidden_states_30": self.crossattention4_hidden_states,
-                "bind_crossattention4_padding_mask": self.crossattention4_padding_mask,
-                "bind_conv5_x": self.bind_conv5_x,
-                "bind_conv5_a": self.bind_conv5_a,
-                "bind_conv5_e": self.bind_conv5_e,
-                "mask": self.mask
+                "observation": {
+                    "mutation_aa_seq": self.mutant_aa_seq,
+                    "mutation_site": self.mutation_site,
+                    "bind_crossattention4_graph_batch": self.crossattention4_graph_batch,
+                    "bind_crossattention4_hidden_states_30": self.crossattention4_hidden_states,
+                    "bind_crossattention4_padding_mask": self.crossattention4_padding_mask,
+                    "bind_conv5_x": self.bind_conv5_x,
+                    "bind_conv5_a": self.bind_conv5_a,
+                    "bind_conv5_e": self.bind_conv5_e,
+                },
+                "action_mask": self.mask
             }
         }
 
