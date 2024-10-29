@@ -88,12 +88,12 @@ class CustomGraphNet(nn.Module):
         self.output_dim = int(np.prod(action_shape))
 
     def forward(self, obs, state=None, info=None):
-        x = torch.as_tensor(obs['bind_conv5_x'], dtype=torch.float32, device=self._device)
-        a = torch.as_tensor(obs['bind_conv5_a'], dtype=torch.long, device=self._device)
-        e = torch.as_tensor(obs['bind_conv5_e'], dtype=torch.float32, device=self._device)
-        batch = torch.as_tensor(obs['bind_crossattention4_graph_batch'], dtype=torch.long, device=self._device)
-        hidden_states = torch.as_tensor(obs['bind_crossattention4_hidden_states_30'], dtype=torch.float32, device=self._device).squeeze(1)
-        attention_mask = torch.as_tensor(obs['bind_crossattention4_padding_mask'], dtype=torch.bool, device=self._device).squeeze(1)
+        x = torch.as_tensor(obs.obs['bind_conv5_x'], dtype=torch.float32, device=self._device)
+        a = torch.as_tensor(obs.obs['bind_conv5_a'], dtype=torch.long, device=self._device)
+        e = torch.as_tensor(obs.obs['bind_conv5_e'], dtype=torch.float32, device=self._device)
+        batch = torch.as_tensor(obs.obs['bind_crossattention4_graph_batch'], dtype=torch.long, device=self._device)
+        hidden_states = torch.as_tensor(obs.obs['bind_crossattention4_hidden_states_30'], dtype=torch.float32, device=self._device).squeeze(1)
+        attention_mask = torch.as_tensor(obs.obs['bind_crossattention4_padding_mask'], dtype=torch.bool, device=self._device).squeeze(1)
 
         if x.dim() == 3:  # If batched
             batch_size, num_nodes, _ = x.shape

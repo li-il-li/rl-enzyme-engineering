@@ -37,7 +37,6 @@ from tianshou.trainer import OnpolicyTrainer
 from tianshou.utils.net.common import ActorCritic, Net, MLP
 from tianshou.utils.net.discrete import Actor, Critic
 from tianshou.utils import TensorboardLogger
-from tianshou.utils.logger.base import LOG_DATA_TYPE, BaseLogger
 from crossattention_graph_net import CustomGraphNet
 
 logger = logging.getLogger(__name__)
@@ -106,8 +105,6 @@ def run(cfg: DictConfig):
     np.random.seed(seed)
     torch.manual_seed(seed)
     
-    tb_logger.write("config", 0, {"seed": seed})
-    
     logger.info(f"Steps per episode: {cfg.on_policy_trainer.steps_per_epoch}")
 
     env = protein_ligand_gym_v0.env(
@@ -119,6 +116,17 @@ def run(cfg: DictConfig):
         config=cfg,
     )
     seq_encoder = env.encode_aa_sequence
+    
+    def get_env(render_mode=None):
+        return PettingZooEnv(protein_ligand_gym_v0.env(
+            render_mode="human",
+            wildtype_aa_seq=cfg.experiment.wildtype_AA_seq,
+            ligand_smile=cfg.experiment.ligand_smile,
+            max_steps=cfg.on_policy_trainer.steps_per_epoch,
+            device=device,
+            config=cfg)
+        )
+
     env = PettingZooEnv(env)
     
     # Model PPO
@@ -183,7 +191,7 @@ def run(cfg: DictConfig):
     )
 
     policy = MultiAgentPolicyManager(
-        [
+        policies = [
             ppo_policy,
             ProteinSequencePolicy(
                 model_size_parameters = cfg.agents.filler_plm.evodiff_model_size_parameters,
@@ -192,7 +200,7 @@ def run(cfg: DictConfig):
                 device=device
             )
         ],
-        env
+        env=env
     )
 
     env = DummyVectorEnv([lambda: env])
@@ -254,8 +262,7 @@ def run(cfg: DictConfig):
         logger=tb_logger,
         verbose=True,
         show_progress=True,
-        test_in_train=True,
-        save_fn=None,
+        test_in_train=True
     ).run()
 
 @hydra.main(version_base=None, config_path="../", config_name='conf')
