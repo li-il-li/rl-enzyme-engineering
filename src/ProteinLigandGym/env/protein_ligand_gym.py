@@ -59,6 +59,13 @@ class TopSequencesTracker:
 
 log = logging.getLogger(__name__)
 
+VOCABULARY = ['0', '1', 'A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+
+def encode_aa_sequence(aa_sequence):
+    vocabulary = VOCABULARY
+    lookup_table_aa_to_int = {amino_acid: np.uint32(idx) for idx, amino_acid in enumerate(vocabulary)}
+    return np.array([lookup_table_aa_to_int[aa] for aa in aa_sequence], dtype=np.uint32)
+
 class ProteinLigandInteractionEnv(AECEnv):
 
     metadata = {
@@ -116,7 +123,7 @@ class ProteinLigandInteractionEnv(AECEnv):
         self.mask = np.ones(len(self.wildtype_aa_seq)-1, dtype=bool)
         
         # Action space is the same for both agents (Tianshou limitation)
-        self.amino_acids_sequence_actions = ['0', '1', 'A', 'R', 'N', 'D', 'C', 'E', 'Q', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+        self.amino_acids_sequence_actions = VOCABULARY
         action_space = spaces.MultiDiscrete(np.array([len(self.amino_acids_sequence_actions)-1] * len(self.wildtype_aa_seq)))
 
         self._action_spaces = {

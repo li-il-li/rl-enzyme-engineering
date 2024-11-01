@@ -115,7 +115,7 @@ def run(cfg: DictConfig):
         device=device,
         config=cfg,
     )
-    seq_encoder = env.encode_aa_sequence
+    seq_encoder = protein_ligand_gym_v0.encode_aa_sequence
     
     def get_env(render_mode=None):
         return PettingZooEnv(protein_ligand_gym_v0.env(

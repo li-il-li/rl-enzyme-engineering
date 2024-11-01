@@ -1,5 +1,7 @@
-from ProteinLigandGym.env.protein_ligand_gym import ProteinLigandInteractionEnv
+from ProteinLigandGym.env.protein_ligand_gym import ProteinLigandInteractionEnv, encode_aa_sequence
 from supersuit import pad_action_space_v0
+
+__all__ = ['env', 'encode_aa_sequence']
 
 def env(render_mode=None,
         wildtype_aa_seq: str = 'AA',
