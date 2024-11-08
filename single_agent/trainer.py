@@ -27,22 +27,25 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from torch.distributions import Distribution
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv
+from tianshou.env import DummyVectorEnv, ShmemVectorEnv, SubprocVectorEnv
 from tianshou.trainer import OnpolicyTrainer
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
 from tianshou.utils import TensorboardLogger
 from agent.crossattention_graph_net import CustomGraphNet
 
-import gymnasium
-from agent.gumbel_softmax_distribution import GumbelSoftmaxDistribution
+from agent.gumbel_softmax_distribution import GumbelSoftmaxDistribution, GumbelTopKDistribution
 from agent.plm_ppo_policy import pLMPPOPolicy
+import gymnasium
 from gymnasium.envs.registration import register
 from env.protein_ligand_gym_env import ProteinLigandInteractionEnv, encode_aa_sequence
 
 from top_sequences_tracker import TopSequencesTracker
 
 logger = logging.getLogger(__name__)
+
+import envpool
+print(envpool.__version__)
 
 
 def run(cfg: DictConfig):
@@ -81,7 +84,7 @@ def run(cfg: DictConfig):
     logger.info(f"Steps per episode: {cfg.on_policy_trainer.steps_per_epoch}")
     
     # Tracker for highest performing mutants
-    top_sequences_tracker = TopSequencesTracker()
+    top_sequences_tracker = TopSequencesTracker(max_size=cfg.experiment.sequence_tracker_max_length)
 
     # Setup Environment
     def init_env(env_id):
@@ -98,7 +101,7 @@ def run(cfg: DictConfig):
         )
     
     train_envs = DummyVectorEnv([
-        lambda i=i: init_env(env_id=i) for i in range(8)
+        lambda i=i: init_env(env_id=i) for i in range(cfg.experiment.number_parallel_envs)
     ])
 
     action_space = train_envs.action_space[0]
@@ -132,7 +135,7 @@ def run(cfg: DictConfig):
     )
     
     def gumbel_dist(logits: torch.Tensor) -> Distribution:
-        return GumbelSoftmaxDistribution(logits)
+        return GumbelTopKDistribution(logits, k=cfg.agents.picker_ppo.gumbel_k, temperature=cfg.agents.picker_ppo.gumbel_dist_temperature)
     
     plm_ppo_policy: pLMPPOPolicy = pLMPPOPolicy(
         model_size_parameters = cfg.agents.filler_plm.evodiff_model_size_parameters,

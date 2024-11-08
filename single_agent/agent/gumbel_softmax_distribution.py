@@ -49,7 +49,8 @@ class GumbelTopKDistribution(Distribution):
         self.temperature = temperature
         
     def sample(self, sample_shape=torch.Size()):
-        return self.rsample(sample_shape)
+        sample = self.rsample(sample_shape)
+        return sample
     
     def rsample(self, sample_shape=torch.Size()):
         # Generate Gumbel noise

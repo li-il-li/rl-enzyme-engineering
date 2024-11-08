@@ -60,6 +60,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         self.ligand_graph = get_graph(self.config.experiment.ligand_smiles)
         self.tracker = top_sequences_tracker # best sequences tracker
         self.wildtype_aa_seq = wildtype_aa_seq # wildtype protein (initial)
+        self.mutant_aa_seq = None
 
         self.device = device
         log.debug("Loading sequence based binding affinity model ...")
@@ -92,7 +93,7 @@ class ProteinLigandInteractionEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        log.info(f"Executing 'reset' of environment: {self.env_id}")
+        log.debug(f"Executing 'reset' of environment: {self.env_id}")
 
         self.timestep = 0
         # TODO get initial value of protein ligand pair:
@@ -162,11 +163,17 @@ class ProteinLigandInteractionEnv(gym.Env):
 
         self.observations = self._get_obs()
         self.infos = self._get_infos()
+        
+        # Set current mutant to become new wildtype for next iteration
+        self.wildtype_aa_seq = self.mutant_aa_seq
 
         return self.observations, self.reward, self.terminated, self.truncated, self.infos
 
 
     def render(self):
+        
+        diff_indices = self._find_diff_indices()
+
         #log.info(f"Rendering...")
         if self.render_mode is None:
             log.warn(
@@ -181,6 +188,7 @@ class ProteinLigandInteractionEnv(gym.Env):
 Env-ID:                 {self.env_id}
 Step:                   {self.timestep}
 Reward:                 {self.reward}  
+Mutations:              {diff_indices}
             """
             
         log.info(string)
@@ -232,12 +240,16 @@ Reward:                 {self.reward}
         lookup_table_int_to_aa = {idx: amino_acid for idx, amino_acid in enumerate(vocabulary)}
         return ''.join(lookup_table_int_to_aa[act] for act in action)
 
-    # TODO: reintroduce but now through difference between input sequence and old sequence
-    #def _mask_string(self, string, mask):
-    #    char_array = np.array(list(string))
-    #    char_array[mask == 1] = '_'
-    #    masked_string = ''.join(char_array)
-    #    return masked_string
+    def _find_diff_indices(self):
+        # List to store differing indices
+        diff_indices = []
+        
+        # Compare characters at each position
+        for i in range(len(self.mutant_aa_seq)):
+            if self.mutant_aa_seq[i] != self.wildtype_aa_seq[i]:
+                diff_indices.append(i)
+                
+        return diff_indices
 
     def _calculate_binding_reward(self):
         binding_reward = (1.0 - float(self.binding_affinity))

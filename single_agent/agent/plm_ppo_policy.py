@@ -33,7 +33,9 @@ class pLMPPOPolicy(PPOPolicy):
         mutation_site_action_batch = super().forward(batch, state, **kwargs)
         
         sequences = batch.obs.mutation_aa_seq
-        mutation_site_indices = mutation_site_action_batch.act.nonzero()[:, 1].reshape(-1, 1).tolist()
+
+        mutation_site_indices = mutation_site_action_batch.act.nonzero()
+        mutation_site_indices = [mutation_site_indices[mutation_site_indices[:, 0] == i][:, 1].tolist() for i in range(mutation_site_indices[:, 0].max().item() + 1)]
 
         mutated_sequences = []
         for sequence, indices in zip(sequences, mutation_site_indices):
