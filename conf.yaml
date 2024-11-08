@@ -1,9 +1,11 @@
 experiment:
   wildtype_AA_seq: "MSTETLRLQKARATEEGLAFETPGGLTRALRDGCFLLAVPPGFDTTPGVTLCREFFRPVEQGGESTRAYRGFRDLDGVYFDREHFQTEHVLIDGPGRERHFPPELRRMAEHMHELARHVLRTVLTELGVARELWSEVTGGAVDGRGTEWFAANHYRSERDRLGCAPHKDTGFVTVLYIEEGGLEAATGGSWTPVDPVPGCFVVNFGGAFELLTSGLDRPVRALLHRVRQCAPRPESADRFSFAAFVNPPPTGDLYRVGADGTATVARSTEDFLRDFNERTWGDGYADFGIAPPEPAGVAEDGVRA"
-  ligand_smile: "CCCc1ccc(O)c(OC)c1"
+  ligand_smiles: "CCCc1ccc(O)c(OC)c1"
   device: "cuda"
   render_timesteps: 20
   time_limit_h: 4
+  sequence_tracker_max_length: 1000
+  number_parallel_envs: 4
 on_policy_trainer:
   epochs: 1000000 
   batch_size: 100
@@ -14,7 +16,8 @@ on_policy_trainer:
     total_size: 10000
 agents:
   picker_ppo:
-    gumbel_dist_temperature: 0.5 # Missing in gumbal softmax
+    gumbel_dist_temperature: 1
+    gumbel_k: 3
     policy:
       eps: 0.2 # 0.2
       value_clip: False # True
@@ -29,7 +32,6 @@ agents:
       learning_rate: 0.0001 #1e-4
       epsilon: 1e-5
   filler_plm:
-    self_determination: 1 
     evodiff_model_size_parameters: 640
 hydra:
   run:

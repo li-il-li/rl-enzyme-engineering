@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "biopython>=1.84",
+    "envpool>=0.8.4",
     "evodiff",
     "fair-esm>=2.0.0",
     "gymnasium<0.29.0",
