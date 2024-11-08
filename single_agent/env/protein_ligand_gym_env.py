@@ -27,7 +27,6 @@ class ProteinLigandInteractionEnv(gym.Env):
 
     metadata = {
         "name": "ProteinLigandGym-v0",
-        "env-id": None,
         "render_modes": ["human"]
     }
 
@@ -35,6 +34,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         self,
         seed,
         top_sequences_tracker,
+        env_id = 0,
         render_mode=None,
         wildtype_aa_seq: str = 'AA',
         ligand_smiles: str = 'SMILE',
@@ -44,6 +44,7 @@ class ProteinLigandInteractionEnv(gym.Env):
     ):
         log.debug("Initializing environment...")
 
+        self.env_id = env_id
         self.config = config # Hydra config
 
         # Gym Env Parameters
@@ -91,7 +92,7 @@ class ProteinLigandInteractionEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        log.info("Executing 'reset' ...")
+        log.info(f"Executing 'reset' of environment: {self.env_id}")
 
         self.timestep = 0
         # TODO get initial value of protein ligand pair:
@@ -177,6 +178,7 @@ class ProteinLigandInteractionEnv(gym.Env):
             #mask = self._mask_string(self.mutant_aa_seq,self.mutation_site)
             sequence = self.mutant_aa_seq
             string = f"""
+Env-ID:                 {self.env_id}
 Step:                   {self.timestep}
 Reward:                 {self.reward}  
             """

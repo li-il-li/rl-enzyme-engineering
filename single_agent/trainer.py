@@ -84,10 +84,11 @@ def run(cfg: DictConfig):
     top_sequences_tracker = TopSequencesTracker()
 
     # Setup Environment
-    def init_env():
+    def init_env(env_id):
         return ProteinLigandInteractionEnv(
             seed=seed,
             top_sequences_tracker=top_sequences_tracker,
+            env_id=env_id,
             render_mode="human",
             wildtype_aa_seq=cfg.experiment.wildtype_AA_seq,
             ligand_smiles=cfg.experiment.ligand_smiles,
@@ -96,7 +97,9 @@ def run(cfg: DictConfig):
             config=cfg
         )
     
-    train_envs = DummyVectorEnv([lambda: init_env() for _ in range(8)])
+    train_envs = DummyVectorEnv([
+        lambda i=i: init_env(env_id=i) for i in range(8)
+    ])
 
     action_space = train_envs.action_space[0]
     observation_space = train_envs.observation_space[0]
