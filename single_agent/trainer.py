@@ -32,11 +32,11 @@ from tianshou.trainer import OnpolicyTrainer
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
 from tianshou.utils import TensorboardLogger
-from crossattention_graph_net import CustomGraphNet
+from agent.crossattention_graph_net import CustomGraphNet
 
 import gymnasium
-from gumbel_softmax_distribution import GumbelSoftmaxDistribution
-from plm_ppo_policy import pLMPPOPolicy
+from agent.gumbel_softmax_distribution import GumbelSoftmaxDistribution
+from agent.plm_ppo_policy import pLMPPOPolicy
 from gymnasium.envs.registration import register
 from env.protein_ligand_gym_env import ProteinLigandInteractionEnv, encode_aa_sequence
 
