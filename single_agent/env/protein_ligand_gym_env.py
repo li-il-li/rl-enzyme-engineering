@@ -11,51 +11,7 @@ import hydra
 import logging
 
 # BIND
-from ProteinLigandGym.env.bind_inference import init_BIND, predict_binder, get_graph
-
-import heapq
-import json
-import threading
-import queue
-
-class TopSequencesTracker:
-    def __init__(self, max_size=1000, filename='top_sequences.json'):
-        self.max_size = max_size
-        self.filename = filename
-        self.sequences = []
-        self.load_from_file()
-        self.save_queue = queue.Queue()
-        self.save_thread = threading.Thread(target=self._save_worker, daemon=True)
-        self.save_thread.start()
-
-    def add_sequence(self, amino_acid, value1, value2):
-        # Use value1 directly for max-heap behavior
-        if len(self.sequences) < self.max_size:
-            heapq.heappush(self.sequences, (value1, amino_acid, value2))
-        elif value1 > self.sequences[0][0]:
-            heapq.heapreplace(self.sequences, (value1, amino_acid, value2))
-        self.save_queue.put(self.get_top_sequences())
-
-    def get_top_sequences(self):
-        return sorted([(seq[1], seq[0], seq[2]) for seq in self.sequences],
-                      key=lambda x: x[1], reverse=True)
-
-    def _save_worker(self):
-        while True:
-            data = self.save_queue.get()
-            with open(self.filename, 'w') as f:
-                json.dump(data, f)
-            self.save_queue.task_done()
-
-    def load_from_file(self):
-        try:
-            with open(self.filename, 'r') as f:
-                data = json.load(f)
-            self.sequences = [(value1, amino_acid, value2)
-                              for amino_acid, value1, value2 in data]
-            heapq.heapify(self.sequences)
-        except FileNotFoundError:
-            print(f"File {self.filename} not found. Starting with an empty list.")
+from env.bind_inference import init_BIND, predict_binder, get_graph
 
 log = logging.getLogger(__name__)
 
@@ -71,12 +27,15 @@ class ProteinLigandInteractionEnv(gym.Env):
 
     metadata = {
         "name": "ProteinLigandGym-v0",
+        "env-id": None,
         "render_modes": ["human"]
     }
 
-    # TODO: check this __init__ if it aligns with the base class... isn't the seed missing here?
     def __init__(
-        self, render_mode=None,
+        self,
+        seed,
+        top_sequences_tracker,
+        render_mode=None,
         wildtype_aa_seq: str = 'AA',
         ligand_smiles: str = 'SMILE',
         max_steps = 100,
@@ -98,7 +57,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         # Environment / World Model (BIND)
         self.ligand_smiles = ligand_smiles # ligand
         self.ligand_graph = get_graph(self.config.experiment.ligand_smiles)
-        self.tracker = TopSequencesTracker() # best sequences tracker
+        self.tracker = top_sequences_tracker # best sequences tracker
         self.wildtype_aa_seq = wildtype_aa_seq # wildtype protein (initial)
 
         self.device = device
@@ -218,11 +177,8 @@ class ProteinLigandInteractionEnv(gym.Env):
             #mask = self._mask_string(self.mutant_aa_seq,self.mutation_site)
             sequence = self.mutant_aa_seq
             string = f"""
-
 Step:                   {self.timestep}
 Reward:                 {self.reward}  
-
-{sequence}
             """
             
         log.info(string)

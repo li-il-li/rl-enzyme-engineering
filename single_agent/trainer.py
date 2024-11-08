@@ -1,7 +1,7 @@
 import sys
-sys.path.append("/root/projects/rl-enzyme-engineering/single_agent/ProteinLigandGym/env/models/BIND/")
-sys.path.append("/root/projects/rl-enzyme-engineering/single_agent/ProteinLigandGym/env/models")
-sys.path.append("/root/projects/rl-enzyme-engineering/single_agent/ProteinLigandGym/env")
+sys.path.append("/root/projects/rl-enzyme-engineering/single_agent/env/models/BIND/")
+sys.path.append("/root/projects/rl-enzyme-engineering/single_agent/env/models")
+sys.path.append("/root/projects/rl-enzyme-engineering/single_agent/env")
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -40,6 +40,8 @@ from plm_ppo_policy import pLMPPOPolicy
 from gymnasium.envs.registration import register
 from env.protein_ligand_gym_env import ProteinLigandInteractionEnv, encode_aa_sequence
 
+from top_sequences_tracker import TopSequencesTracker
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +60,7 @@ def run(cfg: DictConfig):
     def signal_handler(signum, frame):
         if 'env' in locals():
             logger.info("Closing environment...")
-            env.close()
+            train_envs.close()
         if 'write' in locals():
             logger.info("Closing tensorboard writer...")
             writer.close() # Tensorboard writer
@@ -78,9 +80,14 @@ def run(cfg: DictConfig):
     
     logger.info(f"Steps per episode: {cfg.on_policy_trainer.steps_per_epoch}")
     
+    # Tracker for highest performing mutants
+    top_sequences_tracker = TopSequencesTracker()
+
     # Setup Environment
     def init_env():
         return ProteinLigandInteractionEnv(
+            seed=seed,
+            top_sequences_tracker=top_sequences_tracker,
             render_mode="human",
             wildtype_aa_seq=cfg.experiment.wildtype_AA_seq,
             ligand_smiles=cfg.experiment.ligand_smiles,
@@ -89,7 +96,7 @@ def run(cfg: DictConfig):
             config=cfg
         )
     
-    train_envs = DummyVectorEnv([lambda: init_env() for _ in range(2)])
+    train_envs = DummyVectorEnv([lambda: init_env() for _ in range(8)])
 
     action_space = train_envs.action_space[0]
     observation_space = train_envs.observation_space[0]
@@ -209,7 +216,7 @@ def run(cfg: DictConfig):
         test_fn=None,
         stop_fn=stop_fn,
         save_best_fn=None,
-        save_checkpoint_fn=save_checkpoint_fn,
+        save_checkpoint_fn=None, # TODO: Reeanble save_checkpoint_fn
         resume_from_log=False,
         reward_metric=None,
         logger=tb_logger,

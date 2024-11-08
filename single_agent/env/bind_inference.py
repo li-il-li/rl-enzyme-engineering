@@ -60,7 +60,7 @@ def init_BIND(device):
     esm_model.eval()
     esm_model.to(device)
 
-    model = torch.load("/root/projects/rl-enzyme-engineering/single_agent/ProteinLigandGym/env/models/BIND/saves/BIND_checkpoint_12042024.pth", map_location=device)
+    model = torch.load("/root/projects/rl-enzyme-engineering/single_agent/env/models/BIND/saves/BIND_checkpoint_12042024.pth", map_location=device)
     model.eval()
     model.to(device)
     
