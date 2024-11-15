@@ -89,6 +89,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         )
         
         self.render_mode = render_mode
+        self.last_reward = self.bindingproba_to_pKd(self.binding_proba_wildtype)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -98,6 +99,7 @@ class ProteinLigandInteractionEnv(gym.Env):
         self.timestep = 0
         # TODO get initial value of protein ligand pair:
         self.reward = 0
+        self.last_reward = self.bindingproba_to_pKd(self.binding_proba_wildtype)
         self.terminated = False
         self.truncated = False
 
@@ -251,6 +253,16 @@ Mutations:              {diff_indices}
                 
         return diff_indices
 
+    def bindingproba_to_pKd(self, binding_proba):
+        return -np.log10(1/binding_proba -1)
+
     def _calculate_binding_reward(self):
-        binding_reward = (1.0 - float(self.binding_affinity))
-        return binding_reward
+        binding_proba = (1.0 - float(self.binding_affinity)) # since: self.binding_affinity = non_binder_prob
+
+        reward = self.bindingproba_to_pKd(binding_proba) - self.bindingproba_to_pKd(self.binding_proba_wildtype)
+
+        delta_reward = reward - self.last_reward
+        self.last_reward = reward
+
+        return delta_reward
+    
